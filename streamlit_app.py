@@ -188,33 +188,27 @@ if opcao == "📦 Estoque":
 # ==================== MÓDULO: LOGÍSTICA GERAL ===============
 # ============================================================
 elif opcao == "🚚 Logística Geral":
-    st.subheader("🚚 Logística Geral – Indicadores de Entregas")
+    st.subheader("🚚 Logística Geral – Indicadores de Entregas (Shopify)")
 
-    # Escolha da fonte de dados
-    fonte = st.radio("Escolha a fonte de dados:", ["Google Sheets", "Shopify"])
+    # --- Carregar dados da Shopify ---
+    SHOP_NAME = st.secrets["shopify_name"]
+    API_KEY = st.secrets["shopify_api_key"]
+    PASSWORD = st.secrets["shopify_password"]
 
-    if fonte == "Google Sheets":
-        URL_LOGISTICA = "https://docs.google.com/spreadsheets/d/ID_LOGISTICA/export?format=csv"
-        df_filtrado = carregar_planilha_google(URL_LOGISTICA)
+    df_shopify = carregar_dados_shopify(SHOP_NAME, API_KEY, PASSWORD)
 
-    elif fonte == "Shopify":
-        SHOP_NAME = st.secrets["shopify_name"]
-        API_KEY = st.secrets["shopify_api_key"]
-        PASSWORD = st.secrets["shopify_password"]
-        df_shopify = carregar_dados_shopify(SHOP_NAME, API_KEY, PASSWORD)
-
-        # Aqui você mapeia as colunas da Shopify para as mesmas do dashboard
-        df_filtrado = pd.DataFrame()
-        df_filtrado["data_envio"] = pd.to_datetime(df_shopify["created_at"])
-        df_filtrado["data_entrega"] = pd.to_datetime(df_shopify["fulfillments.0.created_at"])
-        df_filtrado["dias_entrega"] = (df_filtrado["data_entrega"] - df_filtrado["data_envio"]).dt.days
-        df_filtrado["Status"] = df_shopify["financial_status"].replace({
-            "paid": "Entregue",
-            "pending": "Pendente",
-            "refunded": "Cancelado"
-        })
-        df_filtrado["estado"] = df_shopify["shipping_address.province"]
-        df_filtrado["cidade"] = df_shopify["shipping_address.city"]
+    # --- Mapear colunas da Shopify para o formato do dashboard ---
+    df_filtrado = pd.DataFrame()
+    df_filtrado["data_envio"] = pd.to_datetime(df_shopify["created_at"])
+    df_filtrado["data_entrega"] = pd.to_datetime(df_shopify["fulfillments.0.created_at"])
+    df_filtrado["dias_entrega"] = (df_filtrado["data_entrega"] - df_filtrado["data_envio"]).dt.days
+    df_filtrado["Status"] = df_shopify["financial_status"].replace({
+        "paid": "Entregue",
+        "pending": "Pendente",
+        "refunded": "Cancelado"
+    })
+    df_filtrado["estado"] = df_shopify["shipping_address.province"]
+    df_filtrado["cidade"] = df_shopify["shipping_address.city"]
 
     # ---------- Cálculo de métricas ----------
     total_pedidos = len(df_filtrado)

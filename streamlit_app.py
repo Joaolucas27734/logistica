@@ -190,25 +190,49 @@ if opcao == "📦 Estoque":
 elif opcao == "🚚 Logística Geral":
     st.subheader("🚚 Logística Geral – Indicadores de Entregas (Shopify)")
 
-    # --- Carregar dados da Shopify ---
-    SHOP_NAME = st.secrets["shopify_name"]
-    API_KEY = st.secrets["shopify_api_key"]
-    PASSWORD = st.secrets["shopify_password"]
+    import requests
 
-    df_shopify = carregar_dados_shopify(SHOP_NAME, API_KEY, PASSWORD)
+    # --- Função para carregar dados da Shopify ---
+    def carregar_dados_shopify():
+        SHOP_NAME = st.secrets["shopify"]["shop_name"]
+        ACCESS_TOKEN = st.secrets["shopify"]["access_token"]
 
-    # --- Mapear colunas da Shopify para o formato do dashboard ---
+        url = f"https://{SHOP_NAME}/admin/api/2023-10/orders.json?status=any&limit=250"
+        headers = {"X-Shopify-Access-Token": ACCESS_TOKEN}
+
+        response = requests.get(url, headers=headers)
+        if response.status_code != 200:
+            st.error(f"Erro ao acessar a Shopify: {response.status_code}")
+            return pd.DataFrame()
+
+        pedidos = response.json().get("orders", [])
+        if not pedidos:
+            st.warning("Nenhum pedido encontrado.")
+            return pd.DataFrame()
+
+        df = pd.json_normalize(pedidos)
+        return df
+
+    # --- Puxar dados da Shopify ---
+    df_shopify = carregar_dados_shopify()
+    if df_shopify.empty:
+        st.stop()
+
+    # --- Mapear colunas para o formato do dashboard ---
     df_filtrado = pd.DataFrame()
     df_filtrado["data_envio"] = pd.to_datetime(df_shopify["created_at"])
-    df_filtrado["data_entrega"] = pd.to_datetime(df_shopify["fulfillments.0.created_at"])
+    df_filtrado["data_entrega"] = pd.to_datetime(df_shopify.get("fulfillments.0.created_at", pd.NaT))
     df_filtrado["dias_entrega"] = (df_filtrado["data_entrega"] - df_filtrado["data_envio"]).dt.days
+
+    # Status financeiro -> Status de entrega
     df_filtrado["Status"] = df_shopify["financial_status"].replace({
         "paid": "Entregue",
         "pending": "Pendente",
         "refunded": "Cancelado"
     })
-    df_filtrado["estado"] = df_shopify["shipping_address.province"]
-    df_filtrado["cidade"] = df_shopify["shipping_address.city"]
+
+    df_filtrado["estado"] = df_shopify["shipping_address.province"].fillna("N/A")
+    df_filtrado["cidade"] = df_shopify["shipping_address.city"].fillna("N/A")
 
     # ---------- Cálculo de métricas ----------
     total_pedidos = len(df_filtrado)
@@ -218,6 +242,7 @@ elif opcao == "🚚 Logística Geral":
     entregas_ate3 = (df_filtrado["dias_entrega"] <= 3).sum() / total_pedidos * 100 if total_pedidos > 0 else 0
     maior_atraso = df_filtrado["dias_entrega"].max()
 
+    # ---------- Mostrar métricas ----------
     col1, col2, col3, col4, col5 = st.columns(5)
     col1.metric("Pedidos Totais", total_pedidos)
     col2.metric("Entregues (%)", f"{pct_entregues:.1f}%")

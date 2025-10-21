@@ -244,10 +244,19 @@ elif opcao == "🚚 Logística Geral":
     data_min = pd.to_datetime(df_shopify["created_at"]).min()
     data_max = pd.to_datetime(df_shopify["created_at"]).max()
     data_inicio, data_fim = st.date_input("Filtrar por período:", [data_min, data_max])
-    df_filtrado = df_shopify[
-        (pd.to_datetime(df_shopify["created_at"]) >= pd.to_datetime(data_inicio)) &
-        (pd.to_datetime(df_shopify["created_at"]) <= pd.to_datetime(data_fim))
-    ]
+# --- Filtro por data ---
+data_min = pd.to_datetime(df_shopify["created_at"]).min()
+data_max = pd.to_datetime(df_shopify["created_at"]).max()
+data_inicio, data_fim = st.date_input("Filtrar por período:", [data_min.date(), data_max.date()])
+
+# Converter para datetime completo para evitar erros
+data_inicio_dt = pd.to_datetime(data_inicio)
+data_fim_dt = pd.to_datetime(data_fim) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
+
+df_filtrado = df_shopify[
+    (pd.to_datetime(df_shopify["created_at"]) >= data_inicio_dt) &
+    (pd.to_datetime(df_shopify["created_at"]) <= data_fim_dt)
+]
 
     # --- Mapear colunas ---
     df_filtrado["data_envio"] = pd.to_datetime(df_filtrado["created_at"])

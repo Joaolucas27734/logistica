@@ -241,48 +241,54 @@ fig_tendencia = px.line(
 st.plotly_chart(fig_tendencia, use_container_width=True)
 
 
-st.subheader("📈 Comparar Quantidade de Pedidos por Variante e Período")
+st.subheader("📈 Comparar Quantidade de Pedidos por Variante (mesmo eixo X para datas)")
 
 # Lista de variantes
 variantes_disponiveis = df_shopify["variante"].dropna().unique()
 
-# Número de variantes que quer comparar
-num_variantes = st.number_input("Quantas variantes quer comparar?", min_value=1, max_value=5, value=2, step=1)
+# Seleção de variantes
+variantes_sel = st.multiselect("Selecione variantes para comparar (mesmo dia no eixo X):", variantes_disponiveis, default=variantes_disponiveis[:2])
 
-df_todas = pd.DataFrame()
-
-for i in range(num_variantes):
-    st.markdown(f"### Variante {i+1}")
-    var_sel = st.selectbox(f"Selecione a variante {i+1}:", variantes_disponiveis, key=f"var{i}")
+if len(variantes_sel) >= 1:
+    df_todas = pd.DataFrame()
     
-    # Período específico para essa variante
-    data_min = df_shopify["data"].min().date()
-    data_max = df_shopify["data"].max().date()
-    data_inicio, data_fim = st.date_input(f"Selecione período para '{var_sel}':", [data_min, data_max], key=f"period{i}")
+    for i, var in enumerate(variantes_sel):
+        st.markdown(f"**Período para a variante '{var}':**")
+        data_min = df_shopify["data"].min().date()
+        data_max = df_shopify["data"].max().date()
+        data_inicio, data_fim = st.date_input(f"Selecione período para {var}:", [data_min, data_max], key=var)
+        
+        # Filtrar dados da variante e do período
+        df_var = df_shopify[
+            (df_shopify["variante"] == var) &
+            (df_shopify["data"].dt.date >= data_inicio) &
+            (df_shopify["data"].dt.date <= data_fim)
+        ]
+        
+        # Agrupar por dia e somar pedidos
+        df_var = df_var.groupby(df_var["data"].dt.date)["itens"].sum().reset_index()
+        df_var["variante"] = var
+        df_var = df_var.rename(columns={"data": "Data", "itens": "Qtd Pedidos"})
+        
+        # Criar eixo X sequencial para sobrepor todas as variantes
+        df_var = df_var.sort_values("Data").reset_index(drop=True)
+        df_var["x_ord"] = range(1, len(df_var)+1)
+        
+        df_todas = pd.concat([df_todas, df_var])
     
-    # Filtrar dados da variante e do período
-    df_var = df_shopify[
-        (df_shopify["variante"] == var_sel) &
-        (df_shopify["data"].dt.date >= data_inicio) &
-        (df_shopify["data"].dt.date <= data_fim)
-    ]
-    
-    # Agrupar por dia e somar pedidos
-    df_var = df_var.groupby(df_var["data"].dt.date)["itens"].sum().reset_index()
-    df_var["variante_per"] = f"{var_sel} ({data_inicio} a {data_fim})"
-    df_var = df_var.rename(columns={"data": "Data", "itens": "Qtd Pedidos"})
-    
-    df_todas = pd.concat([df_todas, df_var])
-
-if not df_todas.empty:
-    fig = px.line(
-        df_todas,
-        x="Data",
-        y="Qtd Pedidos",
-        color="variante_per",
-        markers=True,
-        title="Comparação de Quantidade de Pedidos por Variante e Período"
-    )
-    st.plotly_chart(fig, use_container_width=True)
+    if not df_todas.empty:
+        fig = px.line(
+            df_todas,
+            x="x_ord",
+            y="Qtd Pedidos",
+            color="variante",
+            markers=True,
+            hover_data=["Data"]  # mostra a data real no tooltip
+        )
+        fig.update_layout(
+            xaxis_title="Dia do Período (comparação sequencial)",
+            yaxis_title="Quantidade de Pedidos"
+        )
+        st.plotly_chart(fig, use_container_width=True)
 else:
     st.info("Selecione pelo menos uma variante para visualizar a tendência.")

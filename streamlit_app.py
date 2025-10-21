@@ -238,6 +238,21 @@ elif opcao == "🚚 Logística Geral":
     df_filtrado["estado"] = df_shopify["shipping_address.province"].fillna("N/A")
     df_filtrado["cidade"] = df_shopify["shipping_address.city"].fillna("N/A")
 
+    # --- Filtro por data de envio ---
+    st.sidebar.subheader("📅 Filtrar por Data de Envio (Shopify)")
+    data_min = df_filtrado["data_envio"].min()
+    data_max = df_filtrado["data_envio"].max()
+    data_inicio, data_fim = st.sidebar.date_input(
+        "Selecione o período:",
+        [data_min, data_max],
+        key="logistica_datas"
+    )
+
+    df_filtrado = df_filtrado[
+        (df_filtrado["data_envio"] >= pd.to_datetime(data_inicio)) &
+        (df_filtrado["data_envio"] <= pd.to_datetime(data_fim))
+    ]
+
     # ---------- Cálculo de métricas ----------
     total_pedidos = len(df_filtrado)
     total_entregues = (df_filtrado["Status"] == "Entregue").sum()
@@ -282,3 +297,13 @@ elif opcao == "🚚 Logística Geral":
     st.dataframe(df_filtrado[[
         df_filtrado.columns[0], "data_envio", "data_entrega", "dias_entrega", "estado", "cidade", "Status"
     ]].sort_values("data_envio"))
+
+    # ---------- Pedidos por variante/produto ----------
+    if "line_items" in df_shopify.columns:
+        df_variantes = df_shopify.explode("line_items")
+        df_variantes["variante"] = df_variantes["line_items"].apply(lambda x: x.get("title") if isinstance(x, dict) else "N/A")
+        resumo_variantes = df_variantes.groupby("variante")["id"].count().reset_index()
+        resumo_variantes = resumo_variantes.rename(columns={"id": "Qtd Pedidos"})
+        
+        st.subheader("📊 Pedidos por Variante / Produto")
+        st.dataframe(resumo_variantes.sort_values("Qtd Pedidos", ascending=False))

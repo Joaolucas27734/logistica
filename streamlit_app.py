@@ -124,19 +124,24 @@ if opcao == "📦 Estoque":
 elif opcao == "🚚 Logística Geral":
     st.subheader("🚚 Logística Geral – Pedidos Shopify")
 
+    # --- Função para carregar dados da Shopify ---
     def carregar_dados_shopify():
         SHOP_NAME = st.secrets["shopify"]["shop_name"]
         ACCESS_TOKEN = st.secrets["shopify"]["access_token"]
+
         url = f"https://{SHOP_NAME}/admin/api/2023-10/orders.json?status=any&limit=250"
         headers = {"X-Shopify-Access-Token": ACCESS_TOKEN}
+
         response = requests.get(url, headers=headers)
         if response.status_code != 200:
             st.error(f"Erro ao acessar a Shopify: {response.status_code}")
             return pd.DataFrame()
+
         pedidos = response.json().get("orders", [])
         if not pedidos:
             st.warning("Nenhum pedido encontrado.")
             return pd.DataFrame()
+
         linhas = []
         for pedido in pedidos:
             line_items = pedido.get("line_items", [])
@@ -145,17 +150,19 @@ elif opcao == "🚚 Logística Geral":
             for item in line_items:
                 linha = {
                     "data": pedido.get("created_at"),
-                    "cliente": (pedido.get("customer") or {}).get("first_name", "") + " " + (pedido.get("customer") or {}).get("last_name", ""),
+                    "cliente": (pedido.get("customer") or {}).get("first_name", "") + " " +
+                               (pedido.get("customer") or {}).get("last_name", ""),
                     "Status": pedido.get("fulfillment_status") or "Não entregue",
                     "produto": item.get("title"),
                     "variante": item.get("variant_title"),
                     "itens": item.get("quantity"),
-                    "forma_entrega": (pedido.get("shipping_lines")[0]["title"] if pedido.get("shipping_lines") else "N/A"),
+                    "forma_entrega": (pedido.get("shipping_lines")[0]["title"]
+                                      if pedido.get("shipping_lines") else "N/A"),
                     "estado": (pedido.get("shipping_address") or {}).get("province", "N/A"),
-                    "cidade": (pedido.get("shipping_address") or {}).get("city", "N/A"),
-                    "fulfillments": pedido.get("fulfillments", [])
+                    "cidade": (pedido.get("shipping_address") or {}).get("city", "N/A")
                 }
                 linhas.append(linha)
+
         df = pd.DataFrame(linhas)
         df["data"] = pd.to_datetime(df["data"], errors="coerce")
         return df
@@ -164,16 +171,7 @@ elif opcao == "🚚 Logística Geral":
     if df_shopify.empty:
         st.stop()
 
-    # --- Filtro por período ---
-    data_min = df_shopify["data"].min()
-    data_max = df_shopify["data"].max()
-    data_inicio, data_fim = st.date_input("Filtrar por período:", [data_min.date(), data_max.date()])
-    df_filtrado = df_shopify[
-        (df_shopify["data"] >= pd.to_datetime(data_inicio)) &
-        (df_shopify["data"] <= pd.to_datetime(data_fim))
-    ]
-
     st.subheader("🧾 Pedidos Normalizados da Shopify")
-    st.dataframe(df_filtrado[[
+    st.dataframe(df_shopify[[
         "data", "cliente", "Status", "produto", "variante", "itens", "forma_entrega", "estado", "cidade"
     ]].sort_values("data"))

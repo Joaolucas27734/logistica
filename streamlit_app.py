@@ -209,7 +209,7 @@ elif opcao == "🚚 Logística Geral":
             st.warning("Nenhum pedido encontrado.")
             return pd.DataFrame()
 
-        df = pd.json_normalize(pedidos)
+        df = pd.json_normalize(pedidos, record_path=['line_items'], meta=['id', 'created_at', ['fulfillments']])
         return df
 
     # --- Puxar dados da Shopify ---
@@ -217,43 +217,43 @@ elif opcao == "🚚 Logística Geral":
     if df_shopify.empty:
         st.stop()
 
-    # --- Mapear colunas para o formato do dashboard ---
-    df_filtrado = pd.DataFrame()
-    df_filtrado["data_envio"] = pd.to_datetime(df_shopify["created_at"])
+    # --- Mapear colunas ---
+    df_shopify["data_envio"] = pd.to_datetime(df_shopify["created_at"])
 
     # Tratar fulfillments vazios
-    df_filtrado["data_entrega"] = pd.to_datetime(
+    df_shopify["data_entrega"] = pd.to_datetime(
         df_shopify["fulfillments"].apply(lambda x: x[0]["created_at"] if isinstance(x, list) and len(x) > 0 else pd.NaT)
     )
 
-    df_filtrado["dias_entrega"] = (df_filtrado["data_entrega"] - df_filtrado["data_envio"]).dt.days
+    df_shopify["dias_entrega"] = (df_shopify["data_entrega"] - df_shopify["data_envio"]).dt.days
 
     # Status de entrega real
-    df_filtrado["Status"] = df_shopify["fulfillment_status"].fillna("Não entregue").replace({
+    df_shopify["Status"] = df_shopify["fulfillment_status"].fillna("Não entregue").replace({
         "fulfilled": "Entregue",
         "partial": "Parcial",
         "null": "Não entregue"
     })
 
-    df_filtrado["estado"] = df_shopify["shipping_address.province"].fillna("N/A")
-    df_filtrado["cidade"] = df_shopify["shipping_address.city"].fillna("N/A")
+    # Endereço
+    df_shopify["estado"] = df_shopify["shipping_address.province"].fillna("N/A").astype(str).str.upper()
+    df_shopify["cidade"] = df_shopify["shipping_address.city"].fillna("N/A").astype(str).str.title()
 
-    # --- Filtro por data de envio ---
-    st.sidebar.subheader("📅 Filtrar por Data de Envio (Shopify)")
-    data_min = df_filtrado["data_envio"].min()
-    data_max = df_filtrado["data_envio"].max()
-    data_inicio, data_fim = st.sidebar.date_input(
-        "Selecione o período:",
-        [data_min, data_max],
-        key="logistica_datas"
-    )
+    # --- Filtro de datas ---
+    st.sidebar.subheader("📅 Filtrar por Data de Envio")
+    data_min = df_shopify["data_envio"].min()
+    data_max = df_shopify["data_envio"].max()
+    data_inicio, data_fim = st.sidebar.date_input("Selecione o período:", [data_min, data_max])
 
-    df_filtrado = df_filtrado[
-        (df_filtrado["data_envio"] >= pd.to_datetime(data_inicio)) &
-        (df_filtrado["data_envio"] <= pd.to_datetime(data_fim))
+    # Converter para Timestamp
+    data_inicio = pd.to_datetime(data_inicio)
+    data_fim = pd.to_datetime(data_fim)
+
+    df_filtrado = df_shopify[
+        (df_shopify["data_envio"] >= data_inicio) &
+        (df_shopify["data_envio"] <= data_fim)
     ]
 
-    # ---------- Cálculo de métricas ----------
+    # ---------- Métricas ----------
     total_pedidos = len(df_filtrado)
     total_entregues = (df_filtrado["Status"] == "Entregue").sum()
     pct_entregues = total_entregues / total_pedidos * 100 if total_pedidos > 0 else 0
@@ -261,7 +261,6 @@ elif opcao == "🚚 Logística Geral":
     entregas_ate3 = (df_filtrado["dias_entrega"] <= 3).sum() / total_pedidos * 100 if total_pedidos > 0 else 0
     maior_atraso = df_filtrado["dias_entrega"].max()
 
-    # ---------- Mostrar métricas ----------
     col1, col2, col3, col4, col5 = st.columns(5)
     col1.metric("Pedidos Totais", total_pedidos)
     col2.metric("Entregues (%)", f"{pct_entregues:.1f}%")
@@ -271,8 +270,7 @@ elif opcao == "🚚 Logística Geral":
 
     st.markdown("---")
 
-    # ---------- Gráficos ----------
-    df_filtrado["estado"] = df_filtrado["estado"].astype(str).str.upper()
+    # ---------- Gráficos por Estado ----------
     resumo_estado = df_filtrado.groupby("estado")["dias_entrega"].agg([
         ("Pedidos", "count"),
         ("Média Dias", "mean"),
@@ -293,17 +291,14 @@ elif opcao == "🚚 Logística Geral":
     st.subheader("📦 Distribuição de Dias de Entrega")
     st.bar_chart(df_filtrado["dias_entrega"].value_counts().sort_index())
 
+    # ---------- Pedidos por Produto ----------
+    st.subheader("🛒 Pedidos por Produto/Variante")
+    resumo_produto = df_filtrado.groupby("title")["quantity"].sum().reset_index()
+    resumo_produto = resumo_produto.rename(columns={"title": "Produto", "quantity": "Qtd Pedidos"})
+    st.dataframe(resumo_produto.sort_values("Qtd Pedidos", ascending=False))
+
+    # ---------- Tabela completa ----------
     st.subheader("🧾 Tabela de Entregas")
     st.dataframe(df_filtrado[[
-        df_filtrado.columns[0], "data_envio", "data_entrega", "dias_entrega", "estado", "cidade", "Status"
+        "id", "data_envio", "data_entrega", "dias_entrega", "estado", "cidade", "Status", "title", "quantity"
     ]].sort_values("data_envio"))
-
-    # ---------- Pedidos por variante/produto ----------
-    if "line_items" in df_shopify.columns:
-        df_variantes = df_shopify.explode("line_items")
-        df_variantes["variante"] = df_variantes["line_items"].apply(lambda x: x.get("title") if isinstance(x, dict) else "N/A")
-        resumo_variantes = df_variantes.groupby("variante")["id"].count().reset_index()
-        resumo_variantes = resumo_variantes.rename(columns={"id": "Qtd Pedidos"})
-        
-        st.subheader("📊 Pedidos por Variante / Produto")
-        st.dataframe(resumo_variantes.sort_values("Qtd Pedidos", ascending=False))

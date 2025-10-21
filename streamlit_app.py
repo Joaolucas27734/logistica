@@ -214,36 +214,17 @@ elif opcao == "🚚 Logística Geral":
         df = pd.json_normalize(
             pedidos,
             record_path=["line_items"],
-            meta=["id", "created_at"],
+            meta=["id", "created_at", "fulfillment_status", "customer.email", "shipping_address.province", "shipping_address.city", "fulfillments", "fulfillment_service"],
             errors="ignore"
         )
 
-        # Adicionar fulfillments manualmente
-        # replicando para cada item de linha
-        df["fulfillments"] = [
-            pedido.get("fulfillments", [])
-            for pedido in pedidos
-            for _ in range(len(pedido.get("line_items", [])))
-        ]
-
-        # Adicionar fulfillment_status manualmente
-        df["fulfillment_status"] = [
-            pedido.get("fulfillment_status", None)
-            for pedido in pedidos
-            for _ in range(len(pedido.get("line_items", [])))
-        ]
-
-        # Adicionar endereço manualmente
-        df["shipping_address.province"] = [
-            (pedido.get("shipping_address") or {}).get("province", "N/A")
-            for pedido in pedidos
-            for _ in range(len(pedido.get("line_items", [])))
-        ]
-        df["shipping_address.city"] = [
-            (pedido.get("shipping_address") or {}).get("city", "N/A")
-            for pedido in pedidos
-            for _ in range(len(pedido.get("line_items", [])))
-        ]
+        # Preencher colunas que podem estar vazias
+        df["fulfillments"] = df["fulfillments"].apply(lambda x: x if isinstance(x, list) else [])
+        df["fulfillment_status"] = df["fulfillment_status"].fillna("Não entregue")
+        df["shipping_address.province"] = df["shipping_address.province"].fillna("N/A")
+        df["shipping_address.city"] = df["shipping_address.city"].fillna("N/A")
+        df["customer.email"] = df["customer.email"].fillna("N/A")
+        df["fulfillment_service"] = df.get("fulfillment_service", "N/A")
 
         return df
 
@@ -272,15 +253,15 @@ elif opcao == "🚚 Logística Geral":
     df_filtrado["data_envio"] = df_filtrado["created_at_dt"]
 
     # Tratar fulfillment_status
-    df_filtrado["Status"] = df_filtrado["fulfillment_status"].fillna("Não entregue").replace({
+    df_filtrado["Status"] = df_filtrado["fulfillment_status"].replace({
         "fulfilled": "Entregue",
         "partial": "Parcial",
         "null": "Não entregue"
     })
 
     # Estado e cidade
-    df_filtrado["estado"] = df_filtrado["shipping_address.province"].fillna("N/A").str.upper()
-    df_filtrado["cidade"] = df_filtrado["shipping_address.city"].fillna("N/A").str.title()
+    df_filtrado["estado"] = df_filtrado["shipping_address.province"].str.upper()
+    df_filtrado["cidade"] = df_filtrado["shipping_address.city"].str.title()
 
     # Dias de entrega
     df_filtrado["data_entrega"] = pd.to_datetime(
@@ -330,11 +311,27 @@ elif opcao == "🚚 Logística Geral":
     st.subheader("📦 Distribuição de Dias de Entrega")
     st.bar_chart(df_filtrado["dias_entrega"].value_counts().sort_index())
 
-    # ---------- Tabela de entregas ----------
-    st.subheader("🧾 Tabela de Entregas")
-    st.dataframe(df_filtrado[[
-        "id", "data_envio", "data_entrega", "dias_entrega", "estado", "cidade", "Status", "title", "quantity"
-    ]].sort_values("data_envio"))
+    # ---------- Tabela de entregas personalizada ----------
+    st.subheader("📝 Tabela de Pedidos Shopify")
+
+    df_filtrado["Cliente"] = df_filtrado["customer.email"]
+    df_filtrado["Variante"] = df_filtrado["variant_title"].fillna("N/A")
+    df_filtrado["Itens"] = df_filtrado["quantity"]
+    df_filtrado["Forma de Entrega"] = df_filtrado["fulfillment_service"].fillna("N/A")
+
+    tabela_shopify = df_filtrado[[
+        "created_at_dt",  # Data
+        "Cliente",
+        "Status",
+        "title",          # Produto
+        "Variante",
+        "Itens",
+        "Forma de Entrega"
+    ]].copy()
+
+    tabela_shopify.columns = ["Data", "Cliente", "Status", "Produto", "Variante", "Itens", "Forma de Entrega"]
+    tabela_shopify = tabela_shopify.sort_values("Data")
+    st.dataframe(tabela_shopify)
 
     # ---------- Contagem de pedidos por produto ----------
     st.subheader("📊 Pedidos por Produto")

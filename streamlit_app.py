@@ -210,22 +210,30 @@ elif opcao == "🚚 Logística Geral":
             st.warning("Nenhum pedido encontrado.")
             return pd.DataFrame()
 
-        # Normalizar itens da linha
-        df = pd.json_normalize(
-            pedidos,
-            record_path=["line_items"],
-            meta=["id", "created_at", "fulfillment_status", "customer.email", "shipping_address.province", "shipping_address.city", "fulfillments", "fulfillment_service"],
-            errors="ignore"
-        )
+        # Lista de linhas normalizadas
+        linhas = []
+        for pedido in pedidos:
+            line_items = pedido.get("line_items", [])
+            if not line_items:
+                continue
+            for item in line_items:
+                linha = {
+                    "data": pedido.get("created_at"),
+                    "cliente": (pedido.get("customer") or {}).get("first_name", "") + " " + (pedido.get("customer") or {}).get("last_name", ""),
+                    "Status": pedido.get("fulfillment_status") or "Não entregue",
+                    "produto": item.get("title"),
+                    "variante": item.get("variant_title"),
+                    "itens": item.get("quantity"),
+                    "forma_entrega": (pedido.get("shipping_lines")[0]["title"] if pedido.get("shipping_lines") else "N/A"),
+                    "estado": (pedido.get("shipping_address") or {}).get("province", "N/A"),
+                    "cidade": (pedido.get("shipping_address") or {}).get("city", "N/A"),
+                    "fulfillments": pedido.get("fulfillments", [])
+                }
+                linhas.append(linha)
 
-        # Preencher colunas que podem estar vazias
-        df["fulfillments"] = df["fulfillments"].apply(lambda x: x if isinstance(x, list) else [])
-        df["fulfillment_status"] = df["fulfillment_status"].fillna("Não entregue")
-        df["shipping_address.province"] = df["shipping_address.province"].fillna("N/A")
-        df["shipping_address.city"] = df["shipping_address.city"].fillna("N/A")
-        df["customer.email"] = df["customer.email"].fillna("N/A")
-        df["fulfillment_service"] = df.get("fulfillment_service", "N/A")
-
+        df = pd.DataFrame(linhas)
+        # Converter coluna de data
+        df["data"] = pd.to_datetime(df["data"], errors="coerce")
         return df
 
     # --- Puxar dados da Shopify ---
@@ -233,35 +241,17 @@ elif opcao == "🚚 Logística Geral":
     if df_shopify.empty:
         st.stop()
 
-    # --- Converter created_at para datetime ---
-    df_shopify["created_at_dt"] = pd.to_datetime(df_shopify["created_at"], errors="coerce")
-    df_shopify = df_shopify[df_shopify["created_at_dt"].notna()]
-
     # --- Filtro por data ---
-    data_min = df_shopify["created_at_dt"].min()
-    data_max = df_shopify["created_at_dt"].max()
+    data_min = df_shopify["data"].min()
+    data_max = df_shopify["data"].max()
     data_inicio, data_fim = st.date_input("Filtrar por período:", [data_min.date(), data_max.date()])
     data_inicio_dt = pd.to_datetime(data_inicio)
     data_fim_dt = pd.to_datetime(data_fim) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
 
     df_filtrado = df_shopify[
-        (df_shopify["created_at_dt"] >= data_inicio_dt) &
-        (df_shopify["created_at_dt"] <= data_fim_dt)
+        (df_shopify["data"] >= data_inicio_dt) &
+        (df_shopify["data"] <= data_fim_dt)
     ].copy()
-
-    # --- Colunas principais ---
-    df_filtrado["data_envio"] = df_filtrado["created_at_dt"]
-
-    # Tratar fulfillment_status
-    df_filtrado["Status"] = df_filtrado["fulfillment_status"].replace({
-        "fulfilled": "Entregue",
-        "partial": "Parcial",
-        "null": "Não entregue"
-    })
-
-    # Estado e cidade
-    df_filtrado["estado"] = df_filtrado["shipping_address.province"].str.upper()
-    df_filtrado["cidade"] = df_filtrado["shipping_address.city"].str.title()
 
     # Dias de entrega
     df_filtrado["data_entrega"] = pd.to_datetime(
@@ -269,11 +259,11 @@ elif opcao == "🚚 Logística Geral":
             lambda x: x[0]["created_at"] if isinstance(x, list) and len(x) > 0 else pd.NaT
         )
     )
-    df_filtrado["dias_entrega"] = (df_filtrado["data_entrega"] - df_filtrado["data_envio"]).dt.days
+    df_filtrado["dias_entrega"] = (df_filtrado["data_entrega"] - df_filtrado["data"]).dt.days
 
     # ---------- Métricas gerais ----------
     total_pedidos = len(df_filtrado)
-    total_entregues = (df_filtrado["Status"] == "Entregue").sum()
+    total_entregues = (df_filtrado["Status"] == "fulfilled").sum()
     pct_entregues = total_entregues / total_pedidos * 100 if total_pedidos > 0 else 0
     media_dias = df_filtrado["dias_entrega"].mean()
     entregas_ate3 = (df_filtrado["dias_entrega"] <= 3).sum() / total_pedidos * 100 if total_pedidos > 0 else 0
@@ -311,30 +301,14 @@ elif opcao == "🚚 Logística Geral":
     st.subheader("📦 Distribuição de Dias de Entrega")
     st.bar_chart(df_filtrado["dias_entrega"].value_counts().sort_index())
 
-    # ---------- Tabela de entregas personalizada ----------
-    st.subheader("📝 Tabela de Pedidos Shopify")
-
-    df_filtrado["Cliente"] = df_filtrado["customer.email"]
-    df_filtrado["Variante"] = df_filtrado["variant_title"].fillna("N/A")
-    df_filtrado["Itens"] = df_filtrado["quantity"]
-    df_filtrado["Forma de Entrega"] = df_filtrado["fulfillment_service"].fillna("N/A")
-
-    tabela_shopify = df_filtrado[[
-        "created_at_dt",  # Data
-        "Cliente",
-        "Status",
-        "title",          # Produto
-        "Variante",
-        "Itens",
-        "Forma de Entrega"
-    ]].copy()
-
-    tabela_shopify.columns = ["Data", "Cliente", "Status", "Produto", "Variante", "Itens", "Forma de Entrega"]
-    tabela_shopify = tabela_shopify.sort_values("Data")
-    st.dataframe(tabela_shopify)
+    # ---------- Tabela de entregas ----------
+    st.subheader("🧾 Tabela de Entregas")
+    st.dataframe(df_filtrado[[
+        "data", "cliente", "Status", "produto", "variante", "itens", "forma_entrega", "estado", "cidade"
+    ]].sort_values("data"))
 
     # ---------- Contagem de pedidos por produto ----------
     st.subheader("📊 Pedidos por Produto")
-    pedidos_produto = df_filtrado.groupby("title")["quantity"].sum().reset_index()
-    pedidos_produto = pedidos_produto.rename(columns={"title": "Produto", "quantity": "Qtd Pedidos"})
+    pedidos_produto = df_filtrado.groupby("produto")["itens"].sum().reset_index()
+    pedidos_produto = pedidos_produto.rename(columns={"produto": "Produto", "itens": "Qtd Pedidos"})
     st.dataframe(pedidos_produto.sort_values("Qtd Pedidos", ascending=False))

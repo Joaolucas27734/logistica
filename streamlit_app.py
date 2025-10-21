@@ -194,3 +194,15 @@ elif opcao == "🚚 Logística Geral":
     pedidos_variante = pedidos_variante.rename(columns={"itens": "Qtd Pedidos"})
     pedidos_variante = pedidos_variante.sort_values("Qtd Pedidos", ascending=False)
     st.dataframe(pedidos_variante)
+
+    # --- Pedidos por Cidade ---
+    st.subheader("🏙️ Pedidos por Cidade")
+    pedidos_cidade = df_shopify.groupby("cidade")["itens"].sum().reset_index()
+    pedidos_cidade = pedidos_cidade.rename(columns={"itens": "Qtd Pedidos"})
+    pedidos_cidade = pedidos_cidade.sort_values("Qtd Pedidos", ascending=False)
+    st.dataframe(pedidos_cidade)
+
+    # --- Cidade com mais pedidos ---
+    if not pedidos_cidade.empty:
+        cidade_top = pedidos_cidade.iloc[0]
+        st.markdown(f"**Cidade com mais pedidos:** {cidade_top['cidade']} ({cidade_top['Qtd Pedidos']} itens)")

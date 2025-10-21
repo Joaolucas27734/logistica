@@ -188,10 +188,7 @@ if opcao == "📦 Estoque":
                 title="Quantidade Atual em Estoque vs Estoque Mínimo"
             )
             st.plotly_chart(fig_estoque, use_container_width=True)
-
-# ============================================================
 # ==================== MÓDULO: LOGÍSTICA GERAL ===============
-# ============================================================
 elif opcao == "🚚 Logística Geral":
     st.subheader("🚚 Logística Geral – Indicadores de Entregas (Shopify)")
 
@@ -213,7 +210,41 @@ elif opcao == "🚚 Logística Geral":
             st.warning("Nenhum pedido encontrado.")
             return pd.DataFrame()
 
-        df = pd.json_normalize(pedidos, record_path=["line_items"], meta=["id", "created_at", "fulfillments"])
+        # Normalizar itens da linha
+        df = pd.json_normalize(
+            pedidos,
+            record_path=["line_items"],
+            meta=["id", "created_at"],
+            errors="ignore"
+        )
+
+        # Adicionar fulfillments manualmente
+        # replicando para cada item de linha
+        df["fulfillments"] = [
+            pedido.get("fulfillments", [])
+            for pedido in pedidos
+            for _ in range(len(pedido.get("line_items", [])))
+        ]
+
+        # Adicionar fulfillment_status manualmente
+        df["fulfillment_status"] = [
+            pedido.get("fulfillment_status", None)
+            for pedido in pedidos
+            for _ in range(len(pedido.get("line_items", [])))
+        ]
+
+        # Adicionar endereço manualmente
+        df["shipping_address.province"] = [
+            (pedido.get("shipping_address") or {}).get("province", "N/A")
+            for pedido in pedidos
+            for _ in range(len(pedido.get("line_items", [])))
+        ]
+        df["shipping_address.city"] = [
+            (pedido.get("shipping_address") or {}).get("city", "N/A")
+            for pedido in pedidos
+            for _ in range(len(pedido.get("line_items", [])))
+        ]
+
         return df
 
     # --- Puxar dados da Shopify ---
@@ -221,7 +252,7 @@ elif opcao == "🚚 Logística Geral":
     if df_shopify.empty:
         st.stop()
 
-    # --- Converter created_at para datetime e remover valores inválidos ---
+    # --- Converter created_at para datetime ---
     df_shopify["created_at_dt"] = pd.to_datetime(df_shopify["created_at"], errors="coerce")
     df_shopify = df_shopify[df_shopify["created_at_dt"].notna()]
 

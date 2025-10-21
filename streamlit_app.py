@@ -240,40 +240,36 @@ fig_tendencia = px.line(
 )
 st.plotly_chart(fig_tendencia, use_container_width=True)
 
-st.subheader("📈 Comparar Tendência de Variantes por Período (gráficos empilhados)")
 
+st.subheader("📈 Comparar Quantidade de Pedidos por Variante e Data")
+
+# Seleção de variantes
 variantes_disponiveis = df_shopify["variante"].dropna().unique()
-quantidade_graficos = st.number_input("Quantos gráficos deseja comparar?", min_value=1, max_value=5, value=2)
+variantes_sel = st.multiselect("Selecione variantes para comparar:", variantes_disponiveis)
 
-for i in range(quantidade_graficos):
-    st.markdown(f"### Gráfico {i+1}")
+if len(variantes_sel) >= 1:
+    df_todas = pd.DataFrame()
     
-    # Seleção da variante
-    variante_sel = st.selectbox(f"Selecione a variante {i+1}:", variantes_disponiveis, key=f"var_{i}")
+    for var in variantes_sel:
+        # Filtra apenas a variante
+        df_var = df_shopify[df_shopify["variante"] == var].copy()
+        
+        # Agrupa por data e soma os itens
+        df_var = df_var.groupby(df_var["data"].dt.date)["itens"].sum().reset_index()
+        df_var["variante_sel"] = var
+        df_var = df_var.rename(columns={"data": "Data", "itens": "Qtd Pedidos"})
+        
+        df_todas = pd.concat([df_todas, df_var])
     
-    # Seleção do período
-    data_min = df_shopify["data"].min().date()
-    data_max = df_shopify["data"].max().date()
-    data_inicio, data_fim = st.date_input(f"Período para {variante_sel} (gráfico {i+1}):", [data_min, data_max], key=f"period_{i}")
-    
-    # Filtrar dados da variante e do período
-    df_var = df_shopify[
-        (df_shopify["variante"] == variante_sel) &
-        (df_shopify["data"].dt.date >= data_inicio) &
-        (df_shopify["data"].dt.date <= data_fim)
-    ]
-    df_var = df_var.groupby(df_var["data"].dt.date)["itens"].sum().reset_index()
-    df_var = df_var.rename(columns={"data": "Data", "itens": "Qtd Pedidos"})
-    
-    # Plotar gráfico individual
-    if not df_var.empty:
-        fig = px.line(
-            df_var,
-            x="Data",
-            y="Qtd Pedidos",
-            title=f"Tendência de Pedidos da Variante '{variante_sel}' ({data_inicio} a {data_fim})",
-            markers=True
-        )
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info(f"Nenhum pedido encontrado para '{variante_sel}' neste período.")
+    # Gráfico de linha único com todas as variantes
+    fig = px.line(
+        df_todas,
+        x="Data",
+        y="Qtd Pedidos",
+        color="variante_sel",
+        markers=True,
+        title="Comparação de Quantidade de Pedidos por Variante"
+    )
+    st.plotly_chart(fig, use_container_width=True)
+else:
+    st.info("Selecione pelo menos uma variante para visualizar a tendência.")

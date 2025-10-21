@@ -206,25 +206,10 @@ elif opcao == "🚚 Logística Geral":
     if not pedidos_cidade.empty:
         cidade_top = pedidos_cidade.iloc[0]
         st.markdown(f"**Cidade com mais pedidos:** {cidade_top['cidade']} ({cidade_top['Qtd Pedidos']} itens)")
-        # --- Gráfico de Estados com mais pedidos ---
-st.subheader("🌎 Estados com Mais Pedidos")
+       # --- Contagem de pedidos por estado ---
+st.subheader("📊 Pedidos por Estado")
 pedidos_estado = df_shopify.groupby("estado")["itens"].sum().reset_index()
 pedidos_estado = pedidos_estado.rename(columns={"itens": "Qtd Pedidos"})
+pedidos_estado = pedidos_estado.sort_values("Qtd Pedidos", ascending=False)  # Mais pedidos no topo
 
-# Gráfico de mapa
-fig_map = px.choropleth_mapbox(
-    pedidos_estado,
-    geojson="https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/brazil-states.geojson",
-    locations="estado",
-    featureidkey="properties.sigla",
-    color="Qtd Pedidos",
-    hover_data=["Qtd Pedidos"],
-    color_continuous_scale="Blues",
-    mapbox_style="carto-positron",
-    zoom=3.5,
-    center={"lat": -14.2350, "lon": -51.9253},
-    opacity=0.6,
-    title="Quantidade de Pedidos por Estado"
-)
-st.plotly_chart(fig_map, use_container_width=True)
-
+st.dataframe(pedidos_estado)

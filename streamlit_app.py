@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import math
+import requests
 
 # --- Configuração da página ---
 st.set_page_config(page_title="Dashboard Interativo de Entregas + Estoque", layout="wide")
@@ -190,8 +191,6 @@ if opcao == "📦 Estoque":
 elif opcao == "🚚 Logística Geral":
     st.subheader("🚚 Logística Geral – Indicadores de Entregas (Shopify)")
 
-    import requests
-
     # --- Função para carregar dados da Shopify ---
     def carregar_dados_shopify():
         SHOP_NAME = st.secrets["shopify"]["shop_name"]
@@ -221,14 +220,19 @@ elif opcao == "🚚 Logística Geral":
     # --- Mapear colunas para o formato do dashboard ---
     df_filtrado = pd.DataFrame()
     df_filtrado["data_envio"] = pd.to_datetime(df_shopify["created_at"])
-    df_filtrado["data_entrega"] = pd.to_datetime(df_shopify.get("fulfillments.0.created_at", pd.NaT))
+
+    # Tratar fulfillments vazios
+    df_filtrado["data_entrega"] = pd.to_datetime(
+        df_shopify["fulfillments"].apply(lambda x: x[0]["created_at"] if isinstance(x, list) and len(x) > 0 else pd.NaT)
+    )
+
     df_filtrado["dias_entrega"] = (df_filtrado["data_entrega"] - df_filtrado["data_envio"]).dt.days
 
-    # Status financeiro -> Status de entrega
-    df_filtrado["Status"] = df_shopify["financial_status"].replace({
-        "paid": "Entregue",
-        "pending": "Pendente",
-        "refunded": "Cancelado"
+    # Status de entrega real
+    df_filtrado["Status"] = df_shopify["fulfillment_status"].fillna("Não entregue").replace({
+        "fulfilled": "Entregue",
+        "partial": "Parcial",
+        "null": "Não entregue"
     })
 
     df_filtrado["estado"] = df_shopify["shipping_address.province"].fillna("N/A")

@@ -167,11 +167,30 @@ elif opcao == "🚚 Logística Geral":
         df["data"] = pd.to_datetime(df["data"], errors="coerce")
         return df
 
+    # --- Carregar dados ---
     df_shopify = carregar_dados_shopify()
     if df_shopify.empty:
         st.stop()
 
+    # --- Ordenar do mais recente para o mais antigo ---
+    df_shopify = df_shopify.sort_values("data", ascending=False)
+
+    # --- Mostrar tabela completa ---
     st.subheader("🧾 Pedidos Normalizados da Shopify")
     st.dataframe(df_shopify[[
         "data", "cliente", "Status", "produto", "variante", "itens", "forma_entrega", "estado", "cidade"
-    ]].sort_values("data"))
+    ]])
+
+    # --- Pedidos por Produto ---
+    st.subheader("📊 Pedidos por Produto")
+    pedidos_produto = df_shopify.groupby("produto")["itens"].sum().reset_index()
+    pedidos_produto = pedidos_produto.rename(columns={"itens": "Qtd Pedidos"})
+    pedidos_produto = pedidos_produto.sort_values("Qtd Pedidos", ascending=False)
+    st.dataframe(pedidos_produto)
+
+    # --- Pedidos por Variante ---
+    st.subheader("📊 Pedidos por Variante")
+    pedidos_variante = df_shopify.groupby(["produto", "variante"])["itens"].sum().reset_index()
+    pedidos_variante = pedidos_variante.rename(columns={"itens": "Qtd Pedidos"})
+    pedidos_variante = pedidos_variante.sort_values("Qtd Pedidos", ascending=False)
+    st.dataframe(pedidos_variante)

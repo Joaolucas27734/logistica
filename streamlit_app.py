@@ -240,7 +240,7 @@ fig_tendencia = px.line(
 )
 st.plotly_chart(fig_tendencia, use_container_width=True)
 
-sst.subheader("📈 Comparar Tendência de Variantes por Período (gráficos empilhados)")
+st.subheader("📈 Comparar Tendência de Variantes por Período (gráficos empilhados)")
 
 variantes_disponiveis = df_shopify["variante"].dropna().unique()
 quantidade_graficos = st.number_input("Quantos gráficos deseja comparar?", min_value=1, max_value=5, value=2)

@@ -190,6 +190,33 @@ if opcao == "📦 Estoque":
 elif opcao == "🚚 Logística Geral":
     st.subheader("🚚 Logística Geral – Indicadores de Entregas")
 
+    # Escolha da fonte de dados
+    fonte = st.radio("Escolha a fonte de dados:", ["Google Sheets", "Shopify"])
+
+    if fonte == "Google Sheets":
+        URL_LOGISTICA = "https://docs.google.com/spreadsheets/d/ID_LOGISTICA/export?format=csv"
+        df_filtrado = carregar_planilha_google(URL_LOGISTICA)
+
+    elif fonte == "Shopify":
+        SHOP_NAME = st.secrets["shopify_name"]
+        API_KEY = st.secrets["shopify_api_key"]
+        PASSWORD = st.secrets["shopify_password"]
+        df_shopify = carregar_dados_shopify(SHOP_NAME, API_KEY, PASSWORD)
+
+        # Aqui você mapeia as colunas da Shopify para as mesmas do dashboard
+        df_filtrado = pd.DataFrame()
+        df_filtrado["data_envio"] = pd.to_datetime(df_shopify["created_at"])
+        df_filtrado["data_entrega"] = pd.to_datetime(df_shopify["fulfillments.0.created_at"])
+        df_filtrado["dias_entrega"] = (df_filtrado["data_entrega"] - df_filtrado["data_envio"]).dt.days
+        df_filtrado["Status"] = df_shopify["financial_status"].replace({
+            "paid": "Entregue",
+            "pending": "Pendente",
+            "refunded": "Cancelado"
+        })
+        df_filtrado["estado"] = df_shopify["shipping_address.province"]
+        df_filtrado["cidade"] = df_shopify["shipping_address.city"]
+
+    # ---------- Cálculo de métricas ----------
     total_pedidos = len(df_filtrado)
     total_entregues = (df_filtrado["Status"] == "Entregue").sum()
     pct_entregues = total_entregues / total_pedidos * 100 if total_pedidos > 0 else 0
@@ -206,7 +233,7 @@ elif opcao == "🚚 Logística Geral":
 
     st.markdown("---")
 
-    st.subheader("📈 Entregas por Estado")
+    # ---------- Gráficos ----------
     df_filtrado["estado"] = df_filtrado["estado"].astype(str).str.upper()
     resumo_estado = df_filtrado.groupby("estado")["dias_entrega"].agg([
         ("Pedidos", "count"),
@@ -229,4 +256,6 @@ elif opcao == "🚚 Logística Geral":
     st.bar_chart(df_filtrado["dias_entrega"].value_counts().sort_index())
 
     st.subheader("🧾 Tabela de Entregas")
-    st.dataframe(df_filtrado[[df.columns[0], "data_envio", "data_entrega", "dias_entrega", "estado", "cidade", "Status"]].sort_values("data_envio"))
+    st.dataframe(df_filtrado[[
+        df_filtrado.columns[0], "data_envio", "data_entrega", "dias_entrega", "estado", "cidade", "Status"
+    ]].sort_values("data_envio"))

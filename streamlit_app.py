@@ -213,3 +213,30 @@ pedidos_estado = pedidos_estado.rename(columns={"itens": "Qtd Pedidos"})
 pedidos_estado = pedidos_estado.sort_values("Qtd Pedidos", ascending=False)  # Mais pedidos no topo
 
 st.dataframe(pedidos_estado)
+
+# --- Tendência de crescimento de uma variante ---
+st.subheader("📈 Tendência de Crescimento de uma Variante")
+
+# Seleção da variante
+variantes_disponiveis = df_shopify["variante"].dropna().unique()
+variante_sel = st.selectbox("Selecione a variante:", variantes_disponiveis)
+
+# Filtrar apenas a variante selecionada
+df_variante = df_shopify[df_shopify["variante"] == variante_sel]
+
+# Agrupar por data e somar itens
+df_tendencia = df_variante.groupby(df_variante["data"].dt.date)["itens"].sum().reset_index()
+df_tendencia = df_tendencia.rename(columns={"data": "Data", "itens": "Qtd Pedidos"})
+
+# Plotar gráfico de linha
+import plotly.express as px
+
+fig_tendencia = px.line(
+    df_tendencia,
+    x="Data",
+    y="Qtd Pedidos",
+    title=f"Tendência de Pedidos da Variante: {variante_sel}",
+    markers=True
+)
+st.plotly_chart(fig_tendencia, use_container_width=True)
+

@@ -213,26 +213,7 @@ elif opcao == "🚚 Logística Geral":
             st.warning("Nenhum pedido encontrado.")
             return pd.DataFrame()
 
-        # --- Normalizar line_items manualmente ---
-        linhas = []
-        for pedido in pedidos:
-            linha_base = {
-                "id": pedido.get("id"),
-                "created_at": pedido.get("created_at"),
-                "fulfillments": pedido.get("fulfillments", []),
-                "estado": pedido.get("shipping_address", {}).get("province", "N/A"),
-                "cidade": pedido.get("shipping_address", {}).get("city", "N/A"),
-                "fulfillment_status": pedido.get("fulfillment_status", None)
-            }
-            for item in pedido.get("line_items", []):
-                linha = linha_base.copy()
-                linha.update({
-                    "produto": item.get("title"),
-                    "quantidade": item.get("quantity", 0)
-                })
-                linhas.append(linha)
-
-        df = pd.DataFrame(linhas)
+        df = pd.json_normalize(pedidos)
         return df
 
     # --- Puxar dados da Shopify ---
@@ -243,80 +224,14 @@ elif opcao == "🚚 Logística Geral":
     # --- Filtro por data ---
     data_min = pd.to_datetime(df_shopify["created_at"]).min()
     data_max = pd.to_datetime(df_shopify["created_at"]).max()
-    data_inicio, data_fim = st.date_input("Filtrar por período:", [data_min, data_max])
-# --- Filtro por data ---
-data_min = pd.to_datetime(df_shopify["created_at"]).min()
-data_max = pd.to_datetime(df_shopify["created_at"]).max()
-data_inicio, data_fim = st.date_input("Filtrar por período:", [data_min.date(), data_max.date()])
+    data_inicio, data_fim = st.date_input("Filtrar por período:", [data_min.date(), data_max.date()])
+    data_inicio_dt = pd.to_datetime(data_inicio)
+    data_fim_dt = pd.to_datetime(data_fim) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
 
-# Converter para datetime completo para evitar erros
-data_inicio_dt = pd.to_datetime(data_inicio)
-data_fim_dt = pd.to_datetime(data_fim) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
+    df_filtrado = df_shopify[
+        (pd.to_datetime(df_shopify["created_at"]) >= data_inicio_dt) &
+        (pd.to_datetime(df_shopify["created_at"]) <= data_fim_dt)
+    ]
 
-df_filtrado = df_shopify[
-    (pd.to_datetime(df_shopify["created_at"]) >= data_inicio_dt) &
-    (pd.to_datetime(df_shopify["created_at"]) <= data_fim_dt)
-]
-
-    # --- Mapear colunas ---
+    # --- Mapear colunas para o formato do dashboard ---
     df_filtrado["data_envio"] = pd.to_datetime(df_filtrado["created_at"])
-    df_filtrado["data_entrega"] = pd.to_datetime(
-        df_filtrado["fulfillments"].apply(lambda x: x[0]["created_at"] if isinstance(x, list) and len(x) > 0 else pd.NaT)
-    )
-    df_filtrado["dias_entrega"] = (df_filtrado["data_entrega"] - df_filtrado["data_envio"]).dt.days
-    df_filtrado["Status"] = df_filtrado["fulfillment_status"].fillna("Não entregue").replace({
-        "fulfilled": "Entregue",
-        "partial": "Parcial",
-        "null": "Não entregue"
-    })
-    df_filtrado["estado"] = df_filtrado["estado"].astype(str).str.upper()
-    df_filtrado["cidade"] = df_filtrado["cidade"].astype(str).str.title()
-
-    # ---------- Métricas gerais ----------
-    total_pedidos = len(df_filtrado)
-    total_entregues = (df_filtrado["Status"] == "Entregue").sum()
-    pct_entregues = total_entregues / total_pedidos * 100 if total_pedidos > 0 else 0
-    media_dias = df_filtrado["dias_entrega"].mean()
-    entregas_ate3 = (df_filtrado["dias_entrega"] <= 3).sum() / total_pedidos * 100 if total_pedidos > 0 else 0
-    maior_atraso = df_filtrado["dias_entrega"].max()
-
-    # ---------- Mostrar métricas ----------
-    col1, col2, col3, col4, col5 = st.columns(5)
-    col1.metric("Pedidos Totais", total_pedidos)
-    col2.metric("Entregues (%)", f"{pct_entregues:.1f}%")
-    col3.metric("Média Dias de Entrega", f"{media_dias:.1f}")
-    col4.metric("≤3 dias (%)", f"{entregas_ate3:.1f}%")
-    col5.metric("Maior Atraso", f"{maior_atraso:.0f}")
-
-    st.markdown("---")
-
-    # ---------- Pedidos por produto ----------
-    pedidos_produto = df_filtrado.groupby("produto")["quantidade"].sum().reset_index().sort_values("quantidade", ascending=False)
-    st.subheader("📦 Pedidos por Produto")
-    st.dataframe(pedidos_produto)
-
-    # ---------- Gráficos ----------
-    resumo_estado = df_filtrado.groupby("estado")["dias_entrega"].agg([
-        ("Pedidos", "count"),
-        ("Média Dias", "mean"),
-        ("% ≤3 dias", lambda x: (x <= 3).sum() / len(x) * 100)
-    ]).reset_index()
-
-    fig_estado = px.bar(
-        resumo_estado,
-        x="estado",
-        y="% ≤3 dias",
-        text_auto=True,
-        color="% ≤3 dias",
-        color_continuous_scale="Blues",
-        title="Percentual de Entregas ≤3 dias por Estado"
-    )
-    st.plotly_chart(fig_estado, use_container_width=True)
-
-    st.subheader("📦 Distribuição de Dias de Entrega")
-    st.bar_chart(df_filtrado["dias_entrega"].value_counts().sort_index())
-
-    st.subheader("🧾 Tabela de Entregas")
-    st.dataframe(df_filtrado[[
-        "id", "produto", "quantidade", "data_envio", "data_entrega", "dias_entrega", "estado", "cidade", "Status"
-    ]].sort_values("data_envio"))

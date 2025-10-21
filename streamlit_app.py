@@ -193,7 +193,7 @@ elif opcao == "🚚 Logística Geral":
 
     # --- Função para carregar dados da Shopify ---
     def carregar_dados_shopify():
-        SHOP_NAME = st.secrets["shopify"]["shop_name"]
+        SHOP_NAME = st.secrets["shopify"]["corteja-6230-2.myshopify.com]
         ACCESS_TOKEN = st.secrets["shopify"]["access_token"]
 
         url = f"https://{SHOP_NAME}/admin/api/2023-10/orders.json?status=any&limit=250"

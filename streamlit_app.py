@@ -22,8 +22,7 @@ def salvar_status_no_gsheet(df):
     try:
         sheet = GSHEET_CLIENT.open_by_key(SHEET_ID).worksheet(SHEET_NAME)
         col_idx = sheet.find("Status").col  # encontra a coluna "Status"
-        # Atualiza cada célula da coluna Status
-        for i, status in enumerate(df["Status"], start=2):  # assumindo que linha 1 é cabeçalho
+        for i, status in enumerate(df["Status"], start=2):  # linha 1 é cabeçalho
             sheet.update_cell(i, col_idx, status)
     except Exception as e:
         st.error(f"Erro ao salvar no Google Sheets: {e}")
@@ -110,7 +109,7 @@ if opcao == "📦 Estoque":
     # --- Controle de Estoque ---
     st.subheader("📦 Controle de Estoque Interno")
     aba_estoque = "Estoque"
-    url_estoque = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={aba_estoque}"
+    url_estoque = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={aba_estoque}"
 
     try:
         df_estoque = pd.read_csv(url_estoque)
@@ -140,13 +139,8 @@ if opcao == "📦 Estoque":
 # ===========================================================
 # ================= MÓDULO: LOGÍSTICA GERAL =================
 # ===========================================================
-# ===========================================================
 if opcao == "🚚 Logística Geral":
     st.subheader("🚚 Logística Geral – Pedidos Shopify")
-
-    import requests
-    import pandas as pd
-    import plotly.express as px
 
     # --- Função para carregar pedidos ---
     def carregar_dados_shopify():
@@ -230,7 +224,7 @@ if opcao == "🚚 Logística Geral":
     ])
 
     # --- Aba 1: Pedidos Normalizados ---
-with aba1:
+    with aba1:
         st.subheader("📋 Pedidos Normalizados (editável)")
 
         df_editado = st.data_editor(
@@ -244,6 +238,7 @@ with aba1:
             num_rows="dynamic",
             use_container_width=True
         )
+
         # Salvar automaticamente alterações
         salvar_status_no_gsheet(df_editado)
 
@@ -253,61 +248,4 @@ with aba1:
         pedidos_variante = df_shopify.groupby(["produto", "variante"])["itens"].sum().reset_index().sort_values("itens", ascending=False)
 
         st.subheader("📊 Pedidos por Produto")
-        st.dataframe(pedidos_produto.rename(columns={"itens": "Qtd Pedidos"}))
-
-        st.subheader("📊 Pedidos por Variante")
-        st.dataframe(pedidos_variante.rename(columns={"itens": "Qtd Pedidos"}))
-
-    # --- Aba 3: Cidades e Estados ---
-    with aba3:
-        pedidos_cidade = df_shopify.groupby("cidade")["itens"].sum().reset_index().sort_values("itens", ascending=False)
-        pedidos_estado = df_shopify.groupby("estado")["itens"].sum().reset_index().sort_values("itens", ascending=False)
-
-        st.subheader("🏙️ Pedidos por Cidade")
-        st.dataframe(pedidos_cidade.rename(columns={"itens": "Qtd Pedidos"}))
-
-        st.subheader("🗺️ Pedidos por Estado")
-        st.dataframe(pedidos_estado.rename(columns={"itens": "Qtd Pedidos"}))
-
-        if not pedidos_cidade.empty:
-            cidade_top = pedidos_cidade.iloc[0]
-            st.markdown(f"**Cidade com mais pedidos:** {cidade_top['cidade']} ({cidade_top['itens']} itens)")
-
-    # --- Aba 4: Tendência de Variante ---
-    with aba4:
-        variantes_disponiveis = df_shopify["variante"].dropna().unique()
-        variante_sel = st.selectbox("Selecione a variante:", variantes_disponiveis)
-        df_variante = df_shopify[df_shopify["variante"] == variante_sel]
-        df_tendencia = df_variante.groupby(df_variante["data"].dt.date)["itens"].sum().reset_index()
-        df_tendencia = df_tendencia.rename(columns={"data": "Data", "itens": "Qtd Pedidos"})
-        fig = px.line(df_tendencia, x="Data", y="Qtd Pedidos", markers=True, title=f"Tendência da Variante {variante_sel}")
-        st.plotly_chart(fig, use_container_width=True)
-
-    # --- Aba 5: Comparar Variantes ---
-    with aba5:
-        variantes_disponiveis = df_shopify["variante"].dropna().unique()
-        num_comparacoes = st.number_input("Quantas comparações deseja?", min_value=1, max_value=5, value=2)
-
-        df_todas = pd.DataFrame()
-        for i in range(num_comparacoes):
-            st.markdown(f"### Comparação {i+1}")
-            var_sel = st.selectbox(f"Selecione a variante {i+1}:", variantes_disponiveis, key=f"var{i}")
-            data_min, data_max = df_shopify["data"].min().date(), df_shopify["data"].max().date()
-            data_inicio, data_fim = st.date_input(f"Período para {var_sel}:", [data_min, data_max], key=f"date{i}")
-
-            df_var = df_shopify[
-                (df_shopify["variante"] == var_sel) &
-                (df_shopify["data"].dt.date >= data_inicio) &
-                (df_shopify["data"].dt.date <= data_fim)
-            ]
-            df_var = df_var.groupby(df_var["data"].dt.date)["itens"].sum().reset_index()
-            df_var["variante"] = f"{var_sel} (Comp {i+1})"
-            df_var["x_ord"] = range(1, len(df_var)+1)
-            df_todas = pd.concat([df_todas, df_var])
-
-        if not df_todas.empty:
-            fig = px.line(df_todas, x="x_ord", y="itens", color="variante", markers=True, hover_data=["data"])
-            fig.update_layout(xaxis_title="Dia (comparativo)", yaxis_title="Qtd Pedidos")
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("Nenhuma comparação disponível.")
+        st.dataframe(pedidos_produto.rename(columns={"itens": "Qtd Pedidos"}

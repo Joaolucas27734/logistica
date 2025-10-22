@@ -158,36 +158,21 @@ if opcao == "📦 Estoque":
 
 
 # ===========================================================
-# ================= MÓDULO: LOGÍSTICA GERAL =================
+# ================ MÓDULO: LOGÍSTICA GERAL ==================
 # ===========================================================
 elif opcao == "🚚 Logística Geral":
     st.subheader("🚚 Logística Geral – Pedidos Shopify")
 
-    import requests
-    import pandas as pd
-    import plotly.express as px
-    import gspread
-    from google.oauth2.service_account import Credentials
-    import json
-
-    # --- Configuração da API Google Sheets ---
-    SCOPE = ["https://www.googleapis.com/auth/spreadsheets"]
-    creds_dict = json.loads(st.secrets["gcp_service_account"]["json"])
-    CREDS = Credentials.from_service_account_info(creds_dict, scopes=SCOPE)
-    gc = gspread.authorize(CREDS)
-
-    SHEET_ID = "1dYVZjzCtDBaJ6QdM81WP2k51QodDGZHzKEhzKHSp7v8"
-    sh = gc.open_by_key(SHEET_ID)
-
+    sheet_id = SHEET_ID
+    sh = GSHEET_CLIENT.open_by_key(sheet_id)
     aba_shopify = "Pedidos Shopify"
+
     try:
         worksheet = sh.worksheet(aba_shopify)
     except gspread.exceptions.WorksheetNotFound:
         worksheet = sh.add_worksheet(title=aba_shopify, rows="1000", cols="20")
 
-    # ===========================================================
-    # ========== FUNÇÃO PARA CARREGAR PEDIDOS PAGOS ============
-    # ===========================================================
+    # --- Função para carregar pedidos pagos da Shopify ---
     def carregar_dados_shopify():
         SHOP_NAME = st.secrets["shopify"]["shop_name"]
         ACCESS_TOKEN = st.secrets["shopify"]["access_token"]
@@ -210,7 +195,6 @@ elif opcao == "🚚 Logística Geral":
             pedidos_total.extend(pedidos)
             contador += 1
 
-            # Verifica se há próxima página
             link_header = response.headers.get("Link", "")
             next_url = None
             if 'rel="next"' in link_header:
@@ -226,43 +210,37 @@ elif opcao == "🚚 Logística Geral":
             return pd.DataFrame()
 
         linhas = []
-        for pedido in pedidos_total:
-            # Filtra apenas pedidos pagos
-            if pedido.get("financial_status") != "paid":
-                continue
+for pedido in pedidos_total:
+    # Filtra apenas pedidos pagos
+    if pedido.get("financial_status") != "paid":
+        continue
 
-            line_items = pedido.get("line_items", [])
-            if not line_items:
-                continue
+    line_items = pedido.get("line_items", [])
+    if not line_items:
+        continue
 
-            for item in line_items:
-                linha = {
-                    "data": pedido.get("created_at"),
-                    "cliente": (pedido.get("customer") or {}).get("first_name", "") + " " +
-                               (pedido.get("customer") or {}).get("last_name", ""),
-                    "Status": "",  # campo em branco
-                    "produto": item.get("title"),
-                    "variante": item.get("variant_title"),
-                    "itens": item.get("quantity"),
-                    "forma_entrega": (pedido.get("shipping_lines")[0]["title"]
-                                      if pedido.get("shipping_lines") else "N/A"),
-                    "estado": (pedido.get("shipping_address") or {}).get("province", "N/A"),
-                    "cidade": (pedido.get("shipping_address") or {}).get("city", "N/A"),
-                    "pagamento": pedido.get("financial_status", "")
-                }
-                linhas.append(linha)
+    for item in line_items:
+        linha = {
+            "data": pedido.get("created_at"),
+            "cliente": (pedido.get("customer") or {}).get("first_name", "") + " " +
+                       (pedido.get("customer") or {}).get("last_name", ""),
+            "Status": "",  # campo em branco
+            "produto": item.get("title"),
+            "variante": item.get("variant_title"),
+            "itens": item.get("quantity"),
+            "forma_entrega": (pedido.get("shipping_lines")[0]["title"]
+                              if pedido.get("shipping_lines") else "N/A"),
+            "estado": (pedido.get("shipping_address") or {}).get("province", "N/A"),
+            "cidade": (pedido.get("shipping_address") or {}).get("city", "N/A")
+        }
+        linhas.append(linha)
+
 
         df = pd.DataFrame(linhas)
         df["data"] = pd.to_datetime(df["data"], errors="coerce")
         return df
 
-    # --- Converter DataFrame para lista de listas (para gspread) ---
-    def df_para_lista(df):
-        return [df.columns.tolist()] + df.astype(str).values.tolist()
-
-    # ===========================================================
-    # =============== CARREGAR E SALVAR DADOS ==================
-    # ===========================================================
+    # --- Carregar e salvar dados ---
     df_shopify = carregar_dados_shopify()
     if df_shopify.empty:
         st.stop()
@@ -301,8 +279,8 @@ elif opcao == "🚚 Logística Geral":
             column_config={
                 "Status": st.column_config.SelectboxColumn(
                     "Status",
-                    options=["", "Aguardando", "Em transporte", "Entregue", "Cancelado"],
-                    required=False
+                    options=["Aguardando", "Em transporte", "Entregue", "Cancelado"],
+                    required=True
                 ),
                 "pagamento": st.column_config.TextColumn("Situação Pagamento", disabled=True),
                 "data": st.column_config.DatetimeColumn("Data do Pedido", format="DD/MM/YYYY HH:mm")
@@ -318,7 +296,7 @@ elif opcao == "🚚 Logística Geral":
 
     # ======================= TAB 2 ==============================
     with tab2:
-        st.subheader("📦 Pedidos por Produto")
+        st.subheader("📊 Pedidos por Produto")
         pedidos_produto = df_shopify.groupby("produto")["itens"].sum().reset_index()
         pedidos_produto = pedidos_produto.rename(columns={"itens": "Qtd Pedidos"}).sort_values("Qtd Pedidos", ascending=False)
         st.dataframe(pedidos_produto)
@@ -327,13 +305,7 @@ elif opcao == "🚚 Logística Geral":
     with tab3:
         st.subheader("🏙️ Pedidos por Localização")
         pedidos_estado = df_shopify.groupby("estado")["itens"].sum().reset_index().sort_values("itens", ascending=False)
-        pedidos_cidade = df_shopify.groupby("cidade")["itens"].sum().reset_index().sort_values("itens", ascending=False)
-
-        st.markdown("### 📍 Por Estado")
         st.dataframe(pedidos_estado)
-
-        st.markdown("### 🏙️ Por Cidade")
-        st.dataframe(pedidos_cidade)
 
     # ======================= TAB 4 ==============================
     with tab4:
@@ -342,8 +314,7 @@ elif opcao == "🚚 Logística Geral":
         variante_sel = st.selectbox("Selecione a variante:", variantes_disponiveis)
         df_var = df_shopify[df_shopify["variante"] == variante_sel]
         df_trend = df_var.groupby(df_var["data"].dt.date)["itens"].sum().reset_index()
-        df_trend.columns = ["Data", "Qtd Pedidos"]
-        fig = px.line(df_trend, x="Data", y="Qtd Pedidos", markers=True, title=f"Tendência: {variante_sel}")
+        fig = px.line(df_trend, x="data", y="itens", markers=True, title=f"Tendência: {variante_sel}")
         st.plotly_chart(fig, use_container_width=True)
 
     # ======================= TAB 5 ==============================
@@ -354,6 +325,5 @@ elif opcao == "🚚 Logística Geral":
         var2 = st.selectbox("Variante 2", variantes, key="v2")
         df_comp = df_shopify[df_shopify["variante"].isin([var1, var2])]
         df_comp = df_comp.groupby(["variante", df_comp["data"].dt.date])["itens"].sum().reset_index()
-        df_comp.columns = ["variante", "Data", "Qtd Pedidos"]
-        fig = px.line(df_comp, x="Data", y="Qtd Pedidos", color="variante", markers=True, title="Comparativo de Variantes")
+        fig = px.line(df_comp, x="data", y="itens", color="variante", markers=True, title="Comparativo de Variantes")
         st.plotly_chart(fig, use_container_width=True)

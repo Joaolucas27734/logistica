@@ -1,3 +1,4 @@
 streamlit
 pandas
 plotly
+pip install gspread gspread_dataframe google-auth pandas

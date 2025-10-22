@@ -303,6 +303,7 @@ with tab1:
             st.error(f"❌ Erro ao salvar no Google Sheets: {e}")
 
 # ======================= TAB 2 ==============================
+# ======================= TAB 2 ==============================
 with tab2:
     st.subheader("📊 Análises por Produto e Variante – Comparação de 2 Períodos")
 
@@ -335,15 +336,14 @@ with tab2:
     )
 
     # --- Função auxiliar para agregar por dia ---
-    def preparar_periodo(df, inicio, fim, variante_nome):
+    def preparar_periodo(df, inicio, fim, nome_var):
         df_filtro = df[
             (df["data"].dt.date >= inicio) &
             (df["data"].dt.date <= fim)
         ]
         df_group = df_filtro.groupby(df_filtro["data"].dt.date)["itens"].sum().reset_index()
         df_group.columns = ["Data", "Qtd Pedidos"]
-        df_group["Variante"] = variante_nome
-        df_group["Ponto"] = range(1, len(df_group)+1)
+        df_group["Variante"] = nome_var
         return df_group
 
     df1 = preparar_periodo(df_var1, p1_inicio, p1_fim, f"{var1} P1")
@@ -353,19 +353,19 @@ with tab2:
     df_comparacao = pd.concat([df1, df2], ignore_index=True)
 
     if not df_comparacao.empty:
-        fig = px.line(
+        # --- Gráfico de barras castelizado ---
+        fig = px.bar(
             df_comparacao,
-            x="Ponto",
+            x="Data",
             y="Qtd Pedidos",
             color="Variante",
-            markers=True,
-            hover_data={"Data": True, "Qtd Pedidos": True, "Ponto": True}
+            barmode="group",  # barmode group = barras lado a lado
+            text="Qtd Pedidos",
+            color_discrete_sequence=px.colors.qualitative.Set3,
+            labels={"Data": "Data", "Qtd Pedidos": "Pedidos", "Variante": "Variante/Período"},
+            title=f"Comparação de pedidos – {produto_sel}"
         )
-        fig.update_layout(
-            xaxis_title="Ponto (sequência de pedidos)",
-            yaxis_title="Quantidade de Pedidos",
-            legend_title="Variante/Período"
-        )
+        fig.update_traces(textposition='outside')
         st.plotly_chart(fig, use_container_width=True)
 
         # --- Cards de resumo ---
@@ -406,6 +406,7 @@ with tab2:
         """)
     else:
         st.info("Nenhuma comparação disponível para os períodos selecionados.")
+
 
 
 # ======================= TAB 3 ==============================

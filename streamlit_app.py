@@ -310,59 +310,77 @@ with tab2:
     produtos_disponiveis = st.session_state.df_shopify_editor["produto"].dropna().unique()
     produto_sel = st.selectbox("Selecione o produto:", produtos_disponiveis)
 
-    # --- Seleção de período ---
+    # --- Seleção dos dois períodos ---
     df_produto_total = st.session_state.df_shopify_editor[
         st.session_state.df_shopify_editor["produto"] == produto_sel
     ]
     data_min, data_max = df_produto_total["data"].min().date(), df_produto_total["data"].max().date()
-    data_inicio, data_fim = st.date_input("Selecione o período:", [data_min, data_max])
 
-    # --- Filtrar DataFrame pelo período ---
-    df_periodo = df_produto_total[
-        (df_produto_total["data"].dt.date >= data_inicio) &
-        (df_produto_total["data"].dt.date <= data_fim)
+    st.markdown("### Seleção do Período 1")
+    data_inicio1, data_fim1 = st.date_input("Período 1:", [data_min, data_max], key="periodo1")
+    st.markdown("### Seleção do Período 2")
+    data_inicio2, data_fim2 = st.date_input("Período 2:", [data_min, data_max], key="periodo2")
+
+    # --- Filtrar DataFrames ---
+    df_periodo1 = df_produto_total[
+        (df_produto_total["data"].dt.date >= data_inicio1) &
+        (df_produto_total["data"].dt.date <= data_fim1)
+    ]
+    df_periodo2 = df_produto_total[
+        (df_produto_total["data"].dt.date >= data_inicio2) &
+        (df_produto_total["data"].dt.date <= data_fim2)
     ]
 
-    if df_periodo.empty:
-        st.info("Nenhum pedido disponível para o período selecionado.")
+    if df_periodo1.empty and df_periodo2.empty:
+        st.info("Nenhum pedido disponível para os períodos selecionados.")
     else:
-        # --- Agrupar por dia e variante ---
-        df_group = df_periodo.groupby([df_periodo["data"].dt.date, "variante"])["itens"].sum().reset_index()
-        df_group = df_group.rename(columns={"data": "Data", "itens": "Qtd Pedidos"})
+        # --- Agrupar por variante para cada período ---
+        def agrupar_periodo(df):
+            df_group = df.groupby("variante")["itens"].sum().reset_index()
+            df_group["% do Total"] = df_group["itens"] / df_group["itens"].sum() * 100
+            df_group["% do Total"] = df_group["% do Total"].map("{:.2f}%".format)
+            return df_group
 
-        # --- Total por variante ---
-        df_total_var = df_group.groupby("variante")["Qtd Pedidos"].sum().reset_index()
-        df_total_var["% do Total"] = df_total_var["Qtd Pedidos"] / df_total_var["Qtd Pedidos"].sum() * 100
-        df_total_var["% do Total"] = df_total_var["% do Total"].map("{:.2f}%".format)
+        df_total1 = agrupar_periodo(df_periodo1)
+        df_total2 = agrupar_periodo(df_periodo2)
 
-        st.markdown("### 📊 Total de Pedidos por Variante")
-        st.dataframe(df_total_var.sort_values("Qtd Pedidos", ascending=False))
+        # --- Combinar em uma tabela única para comparação ---
+        df_comparacao = pd.merge(
+            df_total1, df_total2, on="variante", how="outer", suffixes=(f" ({data_inicio1} a {data_fim1})", f" ({data_inicio2} a {data_fim2})")
+        ).fillna(0)
 
-        # --- Gráfico de barras empilhadas (completo) por dia ---
-        st.markdown("### 📈 Pedidos por Variante ao longo dos dias (Total por dia)")
+        st.markdown("### 📊 Comparação de Pedidos por Variante")
+        st.dataframe(df_comparacao.sort_values(f"itens ({data_inicio1} a {data_fim1})", ascending=False))
 
-        # Agrupar por dia para totalizar cada barra
-        df_stack_totais = df_group.groupby("Data")["Qtd Pedidos"].sum().reset_index()
-        df_stack_totais = df_stack_totais.rename(columns={"Qtd Pedidos": "Total Diário"})
+        # --- Gráfico empilhado por período ---
+        st.markdown("### 📈 Pedidos por Variante – Comparação de Períodos")
+
+        # Preparar DataFrame para gráfico
+        df_grafico = pd.DataFrame()
+        for label, df_p in zip([f"Período 1 ({data_inicio1} a {data_fim1})", f"Período 2 ({data_inicio2} a {data_fim2})"], [df_periodo1, df_periodo2]):
+            df_tmp = df_p.groupby("variante")["itens"].sum().reset_index()
+            df_tmp["Período"] = label
+            df_grafico = pd.concat([df_grafico, df_tmp], ignore_index=True)
 
         fig = px.bar(
-            df_group,
-            x="Data",
-            y="Qtd Pedidos",
+            df_grafico,
+            x="Período",
+            y="itens",
             color="variante",
-            barmode="stack",  # empilha as variantes na mesma barra
-            text="Qtd Pedidos",
+            barmode="stack",  # mantém empilhado
+            text="itens",
             color_discrete_sequence=px.colors.qualitative.Set3,
-            labels={"Data": "Data", "Qtd Pedidos": "Pedidos", "variante": "Variante"},
-            title=f"Pedidos diários – {produto_sel}"
+            labels={"itens": "Pedidos", "variante": "Variante"},
+            title=f"Comparação de pedidos por variante – {produto_sel}"
         )
 
-        # Adicionar total diário no topo da barra
-        for idx, row in df_stack_totais.iterrows():
+        # Adicionar total no topo de cada barra
+        totais = df_grafico.groupby("Período")["itens"].sum().reset_index()
+        for idx, row in totais.iterrows():
             fig.add_annotation(
-                x=row["Data"],
-                y=row["Total Diário"] + 0.5,  # pequeno deslocamento acima da barra
-                text=str(row["Total Diário"]),
+                x=row["Período"],
+                y=row["itens"] + 0.5,
+                text=str(row["itens"]),
                 showarrow=False,
                 font=dict(size=12, color="black")
             )
@@ -372,11 +390,14 @@ with tab2:
 
         # --- Insights ---
         st.markdown("### 📝 Insights")
-        total_pedidos = df_group["Qtd Pedidos"].sum()
-        top_variante = df_total_var.sort_values("Qtd Pedidos", ascending=False).iloc[0]
-        st.write(f"- Total de pedidos no período: **{total_pedidos}**")
-        st.write(f"- Variante mais vendida: **{top_variante['variante']}** com **{top_variante['Qtd Pedidos']} pedidos ({top_variante['% do Total']})**")
-        st.write("- O gráfico mostra claramente a contribuição de cada variante para o total diário.")
+        for label, df_p in zip([f"Período 1 ({data_inicio1} a {data_fim1})", f"Período 2 ({data_inicio2} a {data_fim2})"], [df_periodo1, df_periodo2]):
+            total_pedidos = df_p["itens"].sum()
+            if total_pedidos > 0:
+                top_var = df_p.groupby("variante")["itens"].sum().idxmax()
+                qtd_top = df_p.groupby("variante")["itens"].sum().max()
+                pct_top = qtd_top / total_pedidos * 100
+                st.write(f"- {label}: Total de pedidos: **{total_pedidos}**, Variante mais vendida: **{top_var} ({qtd_top} pedidos, {pct_top:.2f}%)**")
+
 
 # ======================= TAB 3 ==============================
 with tab3:

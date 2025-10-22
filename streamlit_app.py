@@ -411,29 +411,31 @@ with tab5:
     st.subheader("⚖️ Comparar Variantes em 2 períodos")
 
     variantes_disponiveis = st.session_state.df_shopify_editor["variante"].dropna().unique()
-    var1 = st.selectbox("Variante 1:", variantes_disponiveis, key="var1_cmp")
-    var2 = st.selectbox("Variante 2:", variantes_disponiveis, key="var2_cmp")
+    
+    # Seleção de variantes
+    var1 = st.selectbox("Variante Período 1:", variantes_disponiveis, key="var1_cmp")
+    var2 = st.selectbox("Variante Período 2:", variantes_disponiveis, key="var2_cmp")
 
     data_min_total = st.session_state.df_shopify_editor["data"].min().date()
     data_max_total = st.session_state.df_shopify_editor["data"].max().date()
-    
-    st.markdown("### Período 1")
-    p1_inicio, p1_fim = st.date_input("Escolha o período 1:", [data_min_total, data_max_total], key="p1_cmp")
-    
-    st.markdown("### Período 2")
-    p2_inicio, p2_fim = st.date_input("Escolha o período 2:", [data_min_total, data_max_total], key="p2_cmp")
 
-    def gerar_grafico(variante, inicio, fim):
+    # Seleção de datas
+    p1_inicio, p1_fim = st.date_input("Período 1:", [data_min_total, data_max_total], key="p1_cmp")
+    p2_inicio, p2_fim = st.date_input("Período 2:", [data_min_total, data_max_total], key="p2_cmp")
+
+    def gerar_grafico(variante, inicio, fim, key):
         df_filtro = st.session_state.df_shopify_editor[
             (st.session_state.df_shopify_editor["variante"] == variante) &
             (st.session_state.df_shopify_editor["data"].dt.date >= inicio) &
             (st.session_state.df_shopify_editor["data"].dt.date <= fim)
         ]
         if df_filtro.empty:
-            return None, None
+            return None
+
         df_group = df_filtro.groupby(df_filtro["data"].dt.date)["itens"].sum().reset_index()
         df_group.columns = ["Data", "Qtd Pedidos"]
         df_group["Variante"] = variante
+
         fig = px.bar(
             df_group,
             x="Data",
@@ -445,18 +447,11 @@ with tab5:
             title=f"{variante} de {inicio} a {fim}"
         )
         fig.update_layout(xaxis_tickformat="%d/%m/%Y")
-        return fig, df_group
+        st.plotly_chart(fig, use_container_width=True, key=key)
 
-    # --- Gerar gráficos ---
-    fig1, df1 = gerar_grafico(var1, p1_inicio, p1_fim)
-    fig2, df2 = gerar_grafico(var2, p2_inicio, p2_fim)
+    # Gerar gráficos com keys diferentes
+    gerar_grafico(var1, p1_inicio, p1_fim, key="fig_cmp1")
+    gerar_grafico(var2, p2_inicio, p2_fim, key="fig_cmp2")
 
-    if fig1:
-        st.plotly_chart(fig1, use_container_width=True, key="fig1_cmp")
-    else:
-        st.info(f"Nenhum pedido para {var1} no período 1.")
-
-    if fig2:
-        st.plotly_chart(fig2, use_container_width=True, key="fig2_cmp")
     else:
         st.info(f"Nenhum pedido para {var2} no período 2.")

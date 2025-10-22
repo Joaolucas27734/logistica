@@ -347,7 +347,7 @@ with tab4:
     st.plotly_chart(fig, use_container_width=True)
 
 # ======================= TAB 5 ==============================
-with aba5:
+with tab5:
     st.subheader("⚖️ Comparar Variantes por Pontos/Datas")
     
     variantes_disponiveis = df_shopify["variante"].dropna().unique()

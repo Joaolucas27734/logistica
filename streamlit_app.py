@@ -310,13 +310,14 @@ with tab2:
     produtos_disponiveis = st.session_state.df_shopify_editor["produto"].dropna().unique()
     produto_sel = st.selectbox("Selecione o produto:", produtos_disponiveis)
 
-    # --- Seleção de período único para análise geral ---
+    # --- Seleção de período ---
     df_produto_total = st.session_state.df_shopify_editor[
         st.session_state.df_shopify_editor["produto"] == produto_sel
     ]
     data_min, data_max = df_produto_total["data"].min().date(), df_produto_total["data"].max().date()
     data_inicio, data_fim = st.date_input("Selecione o período:", [data_min, data_max])
 
+    # --- Filtrar DataFrame pelo período ---
     df_periodo = df_produto_total[
         (df_produto_total["data"].dt.date >= data_inicio) &
         (df_produto_total["data"].dt.date <= data_fim)
@@ -336,92 +337,46 @@ with tab2:
         st.markdown("### 📊 Total de Pedidos por Variante")
         st.dataframe(df_total_var.sort_values("Qtd Pedidos", ascending=False))
 
-        # --- Gráfico de barras castelizado por dia ---
-        st.markdown("### 📈 Pedidos por Variante ao longo dos dias")
+        # --- Gráfico de barras empilhadas (completo) por dia ---
+        st.markdown("### 📈 Pedidos por Variante ao longo dos dias (Total por dia)")
+
+        # Agrupar por dia para totalizar cada barra
+        df_stack = df_group.copy()
+        df_stack_totais = df_stack.groupby("Data")["Qtd Pedidos"].sum().reset_index()
+        df_stack_totais = df_stack_totais.rename(columns={"Qtd Pedidos": "Total Diário"})
+
         fig = px.bar(
-            df_group,
+            df_stack,
             x="Data",
             y="Qtd Pedidos",
             color="variante",
-            barmode="group",
+            barmode="stack",  # empilha as variantes na mesma barra
             text="Qtd Pedidos",
             color_discrete_sequence=px.colors.qualitative.Set3,
             labels={"Data": "Data", "Qtd Pedidos": "Pedidos", "variante": "Variante"},
             title=f"Pedidos diários – {produto_sel}"
         )
-        fig.update_traces(textposition='outside')
+
+        # Adicionar total diário no topo da barra
+        for idx, row in df_stack_totais.iterrows():
+            fig.add_annotation(
+                x=row["Data"],
+                y=row["Total Diário"] + 0.5,  # pequeno deslocamento acima da barra
+                text=str(row["Total Diário"]),
+                showarrow=False,
+                font=dict(size=12, color="black")
+            )
+
+        fig.update_traces(textposition='inside')
         st.plotly_chart(fig, use_container_width=True)
 
-    # ===========================================================
-# Comparação de 2 períodos – barras empilhadas
-# ===========================================================
-st.markdown("---")
-st.subheader("⚖️ Comparação de 2 períodos – Total por variante (barras empilhadas)")
-
-# Seleção de períodos
-p1_inicio, p1_fim = st.date_input("Período 1:", [data_min, data_max], key="p1_comp")
-p2_inicio, p2_fim = st.date_input("Período 2:", [data_min, data_max], key="p2_comp")
-
-df_p1 = df_produto_total[
-    (df_produto_total["data"].dt.date >= p1_inicio) &
-    (df_produto_total["data"].dt.date <= p1_fim)
-]
-df_p2 = df_produto_total[
-    (df_produto_total["data"].dt.date >= p2_inicio) &
-    (df_produto_total["data"].dt.date <= p2_fim)
-]
-
-# Função para resumo empilhado
-def resumo_empilhado(df, nome):
-    if df.empty:
-        return pd.DataFrame(columns=["Variante", "Total Pedidos", "Período"])
-    df_sum = df.groupby("variante")["itens"].sum().reset_index()
-    df_sum = df_sum.rename(columns={"itens": "Total Pedidos"})
-    df_sum["Período"] = nome
-    return df_sum
-
-df_r1 = resumo_empilhado(df_p1, "Período 1")
-df_r2 = resumo_empilhado(df_p2, "Período 2")
-df_compara = pd.concat([df_r1, df_r2], ignore_index=True)
-
-if not df_compara.empty:
-    # Gráfico de barras empilhadas por período
-    fig_comp = px.bar(
-        df_compara,
-        x="Período",
-        y="Total Pedidos",
-        color="Variante",
-        text="Total Pedidos",
-        color_discrete_sequence=px.colors.qualitative.Set3,
-        title=f"Comparação de pedidos por variante – {produto_sel}",
-        labels={"Período": "Período", "Total Pedidos": "Pedidos", "Variante": "Variante"}
-    )
-    fig_comp.update_traces(textposition='inside')
-    st.plotly_chart(fig_comp, use_container_width=True)
-
-    # Insights automáticos
-    st.markdown("### 📌 Insights e Próximos Passos")
-    todas_variantes = df_compara["Variante"].unique()
-    for var in todas_variantes:
-        t1 = df_r1[df_r1["Variante"] == var]["Total Pedidos"].sum() if var in df_r1["Variante"].values else 0
-        t2 = df_r2[df_r2["Variante"] == var]["Total Pedidos"].sum() if var in df_r2["Variante"].values else 0
-        diff = t2 - t1
-        pct = (diff / t1 * 100) if t1 > 0 else 0
-        if diff > 0:
-            st.markdown(f"✅ Variante **{var}** aumentou +{diff} pedidos (+{pct:.1f}%) no período 2")
-        elif diff < 0:
-            st.markdown(f"📉 Variante **{var}** caiu {abs(diff)} pedidos ({pct:.1f}%) no período 2")
-        else:
-            st.markdown(f"⚖️ Variante **{var}** manteve o mesmo número de pedidos")
-
-    st.markdown("""
-    💡 **Sugestões / Próximos passos:**
-    - Analisar fatores que impactaram cada período (promoções, estoque, sazonalidade).  
-    - Verificar estoque das variantes mais vendidas.  
-    - Planejar ações de marketing para variantes com queda de pedidos.  
-    """)
-else:
-    st.info("Nenhuma comparação disponível para os períodos selecionados.")
+        # --- Insights ---
+        st.markdown("### 📝 Insights")
+        total_pedidos = df_group["Qtd Pedidos"].sum()
+        top_variante = df_total_var.sort_values("Qtd Pedidos", ascending=False).iloc[0]
+        st.write(f"- Total de pedidos no período: **{total_pedidos}**")
+        st.write(f"- Variante mais vendida: **{top_variante['variante']}** com **{top_variante['Qtd Pedidos']} pedidos ({top_variante['% do Total']:.1f}%)**")
+        st.write("- O gráfico mostra claramente a contribuição de cada variante para o total diário.")
 
 # ======================= TAB 3 ==============================
 with tab3:

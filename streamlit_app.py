@@ -347,58 +347,30 @@ with tab4:
     st.plotly_chart(fig, use_container_width=True)
 
 # ======================= TAB 5 ==============================
-with tab5:
-    st.subheader("⚖️ Comparar Variantes por Pontos")
+    with aba5:
+        variantes_disponiveis = df_shopify["variante"].dropna().unique()
+        num_comparacoes = st.number_input("Quantas comparações deseja?", min_value=1, max_value=5, value=2)
 
-    variantes = st.session_state.df_shopify_editor["variante"].dropna().unique()
-    
-    # Seleção de variantes
-    var1 = st.selectbox("Variante 1", variantes, key="v1")
-    var2 = st.selectbox("Variante 2", variantes, key="v2")
+        df_todas = pd.DataFrame()
+        for i in range(num_comparacoes):
+            st.markdown(f"### Comparação {i+1}")
+            var_sel = st.selectbox(f"Selecione a variante {i+1}:", variantes_disponiveis, key=f"var{i}")
+            data_min, data_max = df_shopify["data"].min().date(), df_shopify["data"].max().date()
+            data_inicio, data_fim = st.date_input(f"Período para {var_sel}:", [data_min, data_max], key=f"date{i}")
 
-    # Seleção de pontos (número de etapas para cada variante)
-    max_pontos = 5  # você pode alterar conforme necessidade
-    st.markdown("### 🔹 Pontos da Variante 1")
-    ponto_v1 = st.select_slider("Selecione o ponto da Variante 1:", options=[f"Ponto {i}" for i in range(1, max_pontos+1)], key="ponto1")
+            df_var = df_shopify[
+                (df_shopify["variante"] == var_sel) &
+                (df_shopify["data"].dt.date >= data_inicio) &
+                (df_shopify["data"].dt.date <= data_fim)
+            ]
+            df_var = df_var.groupby(df_var["data"].dt.date)["itens"].sum().reset_index()
+            df_var["variante"] = f"{var_sel} (Comp {i+1})"
+            df_var["x_ord"] = range(1, len(df_var)+1)
+            df_todas = pd.concat([df_todas, df_var])
 
-    st.markdown("### 🔹 Pontos da Variante 2")
-    ponto_v2 = st.select_slider("Selecione o ponto da Variante 2:", options=[f"Ponto {i}" for i in range(1, max_pontos+1)], key="ponto2")
-
-    # Criar coluna de pontos fictícios para cada variante
-    df_var1 = st.session_state.df_shopify_editor[st.session_state.df_shopify_editor["variante"] == var1].copy()
-    df_var1 = df_var1.reset_index(drop=True)
-    df_var1["Ponto"] = [f"Ponto {i+1}" for i in range(len(df_var1))]
-
-    df_var2 = st.session_state.df_shopify_editor[st.session_state.df_shopify_editor["variante"] == var2].copy()
-    df_var2 = df_var2.reset_index(drop=True)
-    df_var2["Ponto"] = [f"Ponto {i+1}" for i in range(len(df_var2))]
-
-    # Filtrar apenas o ponto selecionado
-    df_var1_sel = df_var1[df_var1["Ponto"] == ponto_v1]
-    df_var2_sel = df_var2[df_var2["Ponto"] == ponto_v2]
-
-    # Concatenar para gráfico
-    df_comp = pd.concat([
-        df_var1_sel.groupby("Ponto")["itens"].sum().reset_index().assign(variante=var1),
-        df_var2_sel.groupby("Ponto")["itens"].sum().reset_index().assign(variante=var2)
-    ])
-
-    # Gráfico
-    fig = px.bar(df_comp, x="Ponto", y="itens", color="variante", barmode="group",
-                 title="Comparativo de Variantes por Ponto")
-    st.plotly_chart(fig, use_container_width=True)
-
-    # Insights
-    total_var1 = df_var1_sel["itens"].sum()
-    total_var2 = df_var2_sel["itens"].sum()
-    mais_vendida = var1 if total_var1 > total_var2 else var2
-    diferenca_pct = abs(total_var1 - total_var2) / max(total_var1, total_var2) * 100 if max(total_var1, total_var2) > 0 else 0
-
-    st.markdown("### 📊 Resumo da Comparação")
-    c1, c2, c3 = st.columns(3)
-    c1.metric(f"Total {var1}", total_var1)
-    c2.metric(f"Total {var2}", total_var2)
-    c3.metric("Diferença (%)", f"{diferenca_pct:.1f}%", delta=f"{'+' if total_var1>total_var2 else '-'}{diferenca_pct:.1f}%")
-    
-    st.markdown(f"✅ Variante mais vendida no ponto selecionado: **{mais_vendida}**")
-
+        if not df_todas.empty:
+            fig = px.line(df_todas, x="x_ord", y="itens", color="variante", markers=True, hover_data=["data"])
+            fig.update_layout(xaxis_title="Dia (comparativo)", yaxis_title="Qtd Pedidos")
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("Nenhuma comparação disponível.")

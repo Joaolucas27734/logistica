@@ -248,4 +248,5 @@ if opcao == "🚚 Logística Geral":
         pedidos_variante = df_shopify.groupby(["produto", "variante"])["itens"].sum().reset_index().sort_values("itens", ascending=False)
 
         st.subheader("📊 Pedidos por Produto")
-        st.dataframe(pedidos_produto.rename(columns={"itens": "Qtd Pedidos"}
+        st.dataframe(pedidos_produto.rename(columns={"itens": "Qtd Pedidos"}))
+

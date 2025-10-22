@@ -266,17 +266,20 @@ elif opcao == "🚚 Logística Geral":
 with tab1:
     st.subheader("🧾 Pedidos Pagos da Shopify")
 
+    # --- Colunas principais ---
     colunas = [
         "data", "cliente", "Status", "produto", "variante",
-        "itens", "forma_entrega", "estado", "cidade", "pagamento"
+        "itens", "ID", "Codigo de rastreio", "Situacao",
+        "forma_entrega", "estado", "cidade", "pagamento"
     ]
 
     # Inicializa o DataFrame do editor na sessão, se ainda não existir
     if "df_shopify_editor" not in st.session_state:
         st.session_state.df_shopify_editor = df_shopify[colunas].copy()
 
-    st.info("👉 Você pode editar o campo **Status** diretamente na tabela abaixo.")
-    
+    st.info("👉 Você pode editar os campos **Status**, **Código de rastreio** e **Situação** diretamente na tabela abaixo.")
+
+    # --- Editor interativo ---
     df_editado = st.data_editor(
         st.session_state.df_shopify_editor,
         key="editor_pedidos",
@@ -287,21 +290,35 @@ with tab1:
                 options=["Aguardando", "Em transporte", "Entregue", "Cancelado"],
                 required=True
             ),
+            "Codigo de rastreio": st.column_config.TextColumn(
+                "Código de Rastreio",
+                help="Cole ou digite o código de rastreamento do pedido"
+            ),
+            "Situacao": st.column_config.SelectboxColumn(
+                "Situação",
+                options=["Aguardando envio", "Enviado", "Entregue", "Reenviado", "Problema"],
+                help="Situação logística atual do pedido"
+            ),
             "pagamento": st.column_config.TextColumn("Situação Pagamento", disabled=True),
-            "data": st.column_config.DatetimeColumn("Data do Pedido", format="DD/MM/YYYY HH:mm")
+            "data": st.column_config.DatetimeColumn("Data do Pedido", format="DD/MM/YYYY HH:mm"),
+            "ID": st.column_config.TextColumn("ID do Pedido", disabled=True),
         },
-        disabled=["data", "cliente", "produto", "variante", "itens", "forma_entrega", "estado", "cidade", "pagamento"]
+        disabled=["data", "cliente", "produto", "variante", "itens", "forma_entrega", "estado", "cidade", "pagamento", "ID"]
     )
 
-    # Botão para salvar alterações
-    if st.button("💾 Salvar alterações no Status"):
+    # --- Botão para salvar alterações ---
+    if st.button("💾 Salvar alterações"):
         st.session_state.df_shopify_editor["Status"] = df_editado["Status"]
+        st.session_state.df_shopify_editor["Codigo de rastreio"] = df_editado["Codigo de rastreio"]
+        st.session_state.df_shopify_editor["Situacao"] = df_editado["Situacao"]
+
         try:
             worksheet.clear()
             worksheet.update(df_para_lista(st.session_state.df_shopify_editor))
-            st.success("✅ Status atualizado com sucesso no Google Sheets!")
+            st.success("✅ Alterações salvas com sucesso no Google Sheets!")
         except Exception as e:
             st.error(f"❌ Erro ao salvar no Google Sheets: {e}")
+
 
 # ======================= TAB 2 ==============================
 with tab2:

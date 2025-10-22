@@ -335,29 +335,28 @@ with tab2:
         st.info("Nenhum pedido disponível para os períodos selecionados.")
     else:
         # --- Agrupar por variante para cada período ---
-        def agrupar_periodo(df):
+        def agrupar_periodo(df, label):
             df_group = df.groupby("variante")["itens"].sum().reset_index()
-            df_group["% do Total"] = df_group["itens"] / df_group["itens"].sum() * 100
-            df_group["% do Total"] = df_group["% do Total"].map("{:.2f}%".format)
+            df_group["%_Total"] = df_group["itens"] / df_group["itens"].sum() * 100
+            df_group["%_Total"] = df_group["%_Total"].round(2)
+            df_group = df_group.rename(columns={"itens": f"itens_{label}", "%_Total": f"%_Total_{label}"})
             return df_group
 
-        df_total1 = agrupar_periodo(df_periodo1)
-        df_total2 = agrupar_periodo(df_periodo2)
+        df_total1 = agrupar_periodo(df_periodo1, "Periodo1")
+        df_total2 = agrupar_periodo(df_periodo2, "Periodo2")
 
         # --- Combinar em uma tabela única para comparação ---
         df_comparacao = pd.merge(
-            df_total1, df_total2, on="variante", how="outer", suffixes=(f" ({data_inicio1} a {data_fim1})", f" ({data_inicio2} a {data_fim2})")
+            df_total1, df_total2, on="variante", how="outer"
         ).fillna(0)
 
         st.markdown("### 📊 Comparação de Pedidos por Variante")
-        st.dataframe(df_comparacao.sort_values(f"itens ({data_inicio1} a {data_fim1})", ascending=False))
+        st.dataframe(df_comparacao.sort_values("itens_Periodo1", ascending=False))
 
         # --- Gráfico empilhado por período ---
         st.markdown("### 📈 Pedidos por Variante – Comparação de Períodos")
-
-        # Preparar DataFrame para gráfico
         df_grafico = pd.DataFrame()
-        for label, df_p in zip([f"Período 1 ({data_inicio1} a {data_fim1})", f"Período 2 ({data_inicio2} a {data_fim2})"], [df_periodo1, df_periodo2]):
+        for label, df_p in zip(["Periodo1", "Periodo2"], [df_periodo1, df_periodo2]):
             df_tmp = df_p.groupby("variante")["itens"].sum().reset_index()
             df_tmp["Período"] = label
             df_grafico = pd.concat([df_grafico, df_tmp], ignore_index=True)
@@ -367,7 +366,7 @@ with tab2:
             x="Período",
             y="itens",
             color="variante",
-            barmode="stack",  # mantém empilhado
+            barmode="stack",
             text="itens",
             color_discrete_sequence=px.colors.qualitative.Set3,
             labels={"itens": "Pedidos", "variante": "Variante"},
@@ -390,7 +389,7 @@ with tab2:
 
         # --- Insights ---
         st.markdown("### 📝 Insights")
-        for label, df_p in zip([f"Período 1 ({data_inicio1} a {data_fim1})", f"Período 2 ({data_inicio2} a {data_fim2})"], [df_periodo1, df_periodo2]):
+        for label, df_p in zip(["Período 1", "Período 2"], [df_periodo1, df_periodo2]):
             total_pedidos = df_p["itens"].sum()
             if total_pedidos > 0:
                 top_var = df_p.groupby("variante")["itens"].sum().idxmax()

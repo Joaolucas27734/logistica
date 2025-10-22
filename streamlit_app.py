@@ -303,7 +303,6 @@ with tab1:
             st.error(f"❌ Erro ao salvar no Google Sheets: {e}")
 
 # ======================= TAB 2 ==============================
-# ======================= TAB 2 ==============================
 with tab2:
     st.subheader("📊 Análises por Produto e Variante")
 
@@ -322,37 +321,27 @@ with tab2:
 
     df_produto = df_filtrado[df_filtrado["produto"] == produto_sel]
 
-    # --- Quantidade por variante ---
-    qtd_variantes = df_produto.groupby("variante")["itens"].sum().reset_index().sort_values("itens", ascending=False)
-    qtd_variantes = qtd_variantes.rename(columns={"itens": "Qtd Pedidos"})
-    
-    st.markdown(f"### Quantidade de pedidos por variante – {produto_sel}")
-    st.dataframe(qtd_variantes)
+    # --- Agrupar por data e variante ---
+    df_group = df_produto.groupby([df_produto["data"].dt.date, "variante"])["itens"].sum().reset_index()
+    df_group = df_group.rename(columns={"data": "Data", "itens": "Qtd Pedidos"})
 
-    # --- Gráfico de barras castelizado ---
-    if not qtd_variantes.empty:
+    # --- Gráfico de barras empilhadas por variante ---
+    if not df_group.empty:
         fig_bar = px.bar(
-            qtd_variantes,
-            x="variante",
-            y="Qtd Pedidos",
-            text="Qtd Pedidos",
+            df_group,
+            x="data",
+            y="itens",
             color="variante",
-            color_discrete_sequence=px.colors.qualitative.Set3,  # Paleta de cores castelizada
-            title=f"Distribuição de variantes do produto '{produto_sel}'"
+            barmode="stack",  # ou "group" se preferir barras lado a lado
+            text="itens",
+            color_discrete_sequence=px.colors.qualitative.Set3,
+            labels={"data": "Data", "itens": "Qtd Pedidos", "variante": "Variante"},
+            title=f"Pedidos por dia e variante – {produto_sel}"
         )
         fig_bar.update_traces(textposition='outside')
-        fig_bar.update_layout(
-            xaxis_title="Variante",
-            yaxis_title="Qtd Pedidos",
-            showlegend=False,
-            uniformtext_minsize=8,
-            uniformtext_mode='hide'
-        )
         st.plotly_chart(fig_bar, use_container_width=True)
     else:
         st.info("Nenhum dado disponível para o período e produto selecionados.")
-
-
 
 # ======================= TAB 3 ==============================
 with tab3:

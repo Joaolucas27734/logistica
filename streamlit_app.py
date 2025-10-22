@@ -22,7 +22,6 @@ GSHEET_CLIENT = gspread.authorize(CREDS)
 SHEET_ID = "1dYVZjzCtDBaJ6QdM81WP2k51QodDGZHzKEhzKHSp7v8"
 SHEET_NAME = "Pedidos"  # aba principal
 
-
 # ===========================================================
 # =================== FUNÇÕES AUXILIARES ====================
 # ===========================================================
@@ -36,11 +35,9 @@ def salvar_status_no_gsheet(df):
     except Exception as e:
         st.error(f"Erro ao salvar no Google Sheets: {e}")
 
-
 def df_para_lista(df):
     """Converte DataFrame em lista de listas para enviar ao Google Sheets"""
     return [df.columns.tolist()] + df.astype(str).values.tolist()
-
 
 # ===========================================================
 # ====================== DADOS BASE =========================
@@ -60,9 +57,9 @@ df["cidade"] = df.iloc[:, 4].astype(str).str.title()
 # --- Status de entrega ---
 df["Status"] = df["data_entrega"].apply(lambda x: "Entregue" if pd.notna(x) else "Não entregue")
 
-# --- Código de rastreio e link ---
+# --- Código de rastreio e link Sportech ---
 df["Código Rastreio"] = df.iloc[:, 5].astype(str)
-df["Link J&T"] = "https://www2.jtexpress.com.br/rastreio/track?codigo=" + df["Código Rastreio"]
+df["Link Sportech"] = "https://lojasportech.com/pages/rastreio?codigo=" + df["Código Rastreio"]
 
 # ===========================================================
 # ==================== BARRA LATERAL ========================
@@ -74,7 +71,6 @@ data_inicio, data_fim = st.sidebar.date_input("Selecione o período:", [data_min
 
 st.sidebar.markdown("---")
 opcao = st.sidebar.radio("📋 Selecione o módulo:", ["📦 Estoque", "🚚 Logística Geral"])
-
 
 # ===========================================================
 # ==================== MÓDULO: ESTOQUE =====================
@@ -156,38 +152,13 @@ if opcao == "📦 Estoque":
     st.subheader("📝 Estoque Atual")
     st.dataframe(df_estoque_atual[["Produto", "Quantidade", "Ja Gasto", "Quantidade_Atual", "Pacotes (20 peças)", "Estoque Mínimo"]])
 
-
 # ===========================================================
 # ================= MÓDULO: LOGÍSTICA GERAL =================
 # ===========================================================
 elif opcao == "🚚 Logística Geral":
     st.subheader("🚚 Logística Geral – Pedidos Shopify")
 
-    import requests
-    import pandas as pd
-    import plotly.express as px
-    import gspread
-    from google.oauth2.service_account import Credentials
-    import json
-
-    # --- Configuração da API Google Sheets ---
-    SCOPE = ["https://www.googleapis.com/auth/spreadsheets"]
-    creds_dict = json.loads(st.secrets["gcp_service_account"]["json"])
-    CREDS = Credentials.from_service_account_info(creds_dict, scopes=SCOPE)
-    gc = gspread.authorize(CREDS)
-
-    SHEET_ID = "1dYVZjzCtDBaJ6QdM81WP2k51QodDGZHzKEhzKHSp7v8"
-    sh = gc.open_by_key(SHEET_ID)
-
-    aba_shopify = "Pedidos Shopify"
-    try:
-        worksheet = sh.worksheet(aba_shopify)
-    except gspread.exceptions.WorksheetNotFound:
-        worksheet = sh.add_worksheet(title=aba_shopify, rows="1000", cols="20")
-
-    # ===========================================================
-    # ========== FUNÇÃO PARA CARREGAR PEDIDOS PAGOS ============
-    # ===========================================================
+    # --- Carregar dados da Shopify ---
     def carregar_dados_shopify():
         SHOP_NAME = st.secrets["shopify"]["shop_name"]
         ACCESS_TOKEN = st.secrets["shopify"]["access_token"]
@@ -210,7 +181,7 @@ elif opcao == "🚚 Logística Geral":
             pedidos_total.extend(pedidos)
             contador += 1
 
-            # Verifica se há próxima página
+            # Próxima página
             link_header = response.headers.get("Link", "")
             next_url = None
             if 'rel="next"' in link_header:
@@ -227,7 +198,6 @@ elif opcao == "🚚 Logística Geral":
 
         linhas = []
         for pedido in pedidos_total:
-            # Filtra apenas pedidos pagos
             if pedido.get("financial_status") != "paid":
                 continue
 
@@ -236,6 +206,7 @@ elif opcao == "🚚 Logística Geral":
                 continue
 
             for item in line_items:
+                codigo_rastreio = item.get("sku", "")
                 linha = {
                     "data": pedido.get("created_at"),
                     "cliente": (pedido.get("customer") or {}).get("first_name", "") + " " +
@@ -248,7 +219,9 @@ elif opcao == "🚚 Logística Geral":
                                       if pedido.get("shipping_lines") else "N/A"),
                     "estado": (pedido.get("shipping_address") or {}).get("province", "N/A"),
                     "cidade": (pedido.get("shipping_address") or {}).get("city", "N/A"),
-                    "pagamento": pedido.get("financial_status", "")
+                    "pagamento": pedido.get("financial_status", ""),
+                    "Código Rastreio": codigo_rastreio,
+                    "Link Sportech": f"https://lojasportech.com/pages/rastreio?codigo={codigo_rastreio}"
                 }
                 linhas.append(linha)
 
@@ -256,26 +229,14 @@ elif opcao == "🚚 Logística Geral":
         df["data"] = pd.to_datetime(df["data"], errors="coerce")
         return df
 
-    # --- Converter DataFrame para lista de listas (para gspread) ---
-    def df_para_lista(df):
-        return [df.columns.tolist()] + df.astype(str).values.tolist()
-
-    # ===========================================================
-    # =============== CARREGAR E SALVAR DADOS ==================
-    # ===========================================================
     df_shopify = carregar_dados_shopify()
     if df_shopify.empty:
         st.stop()
 
-    worksheet.clear()
-    worksheet.update(df_para_lista(df_shopify))
-    st.success(f"✅ Dados da Shopify (apenas pagos) salvos na aba '{aba_shopify}'")
+    st.session_state.df_shopify = df_shopify.copy()
+    df_shopify = st.session_state.df_shopify.copy()
 
-    df_shopify = df_shopify.sort_values("data", ascending=False)
-
-    # ===========================================================
     # ======================= ABAS ==============================
-    # ===========================================================
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📋 Pedidos Pagos",
         "📦 Análises por Produto",
@@ -284,37 +245,15 @@ elif opcao == "🚚 Logística Geral":
         "⚖️ Comparar Variantes"
     ])
 
-    # ======================= TAB 1 ==============================
+    # --- TAB 1: Pedidos Pagos ---
     with tab1:
         st.subheader("🧾 Pedidos Pagos da Shopify")
-
         colunas = [
             "data", "cliente", "Status", "produto", "variante",
-            "itens", "forma_entrega", "estado", "cidade", "pagamento"
+            "itens", "forma_entrega", "estado", "cidade", "pagamento", "Código Rastreio", "Link Sportech"
         ]
+        st.dataframe(df_shopify[colunas])
 
-        st.info("👉 Você pode editar o campo **Status** diretamente na tabela abaixo.")
-        df_editado = st.data_editor(
-            df_shopify[colunas],
-            key="editor_pedidos",
-            hide_index=True,
-            column_config={
-                "Status": st.column_config.SelectboxColumn(
-                    "Status",
-                    options=["", "Aguardando", "Em transporte", "Entregue", "Cancelado"],
-                    required=False
-                ),
-                "pagamento": st.column_config.TextColumn("Situação Pagamento", disabled=True),
-                "data": st.column_config.DatetimeColumn("Data do Pedido", format="DD/MM/YYYY HH:mm")
-            },
-            disabled=["data", "cliente", "produto", "variante", "itens", "forma_entrega", "estado", "cidade", "pagamento"]
-        )
-
-        if st.button("💾 Salvar alterações no Status"):
-            df_shopify["Status"] = df_editado["Status"]
-            worksheet.clear()
-            worksheet.update(df_para_lista(df_shopify))
-            st.success("✅ Status atualizado com sucesso no Google Sheets!")
 
     # ======================= TAB 2 ==============================
     with tab2:

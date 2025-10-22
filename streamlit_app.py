@@ -244,7 +244,6 @@ with aba1:
             num_rows="dynamic",
             use_container_width=True
         )
-
         # Salvar automaticamente alterações
         salvar_status_no_gsheet(df_editado)
 

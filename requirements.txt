@@ -1,4 +1,6 @@
-streamlit
+streamlit>=1.24.0
 pandas
 plotly
-pip install gspread gspread_dataframe google-auth pandas
+requests
+gspread
+google-auth

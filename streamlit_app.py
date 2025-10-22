@@ -347,30 +347,61 @@ with tab4:
     st.plotly_chart(fig, use_container_width=True)
 
 # ======================= TAB 5 ==============================
-    with aba5:
-        variantes_disponiveis = df_shopify["variante"].dropna().unique()
-        num_comparacoes = st.number_input("Quantas comparações deseja?", min_value=1, max_value=5, value=2)
+with aba5:
+    st.subheader("⚖️ Comparar Variantes por Pontos/Datas")
+    
+    variantes_disponiveis = df_shopify["variante"].dropna().unique()
+    num_comparacoes = st.number_input("Quantas comparações deseja?", min_value=1, max_value=5, value=2)
 
-        df_todas = pd.DataFrame()
+    df_todas = pd.DataFrame()
+
+    for i in range(num_comparacoes):
+        st.markdown(f"### Comparação {i+1}")
+        var_sel = st.selectbox(f"Selecione a variante {i+1}:", variantes_disponiveis, key=f"var{i}")
+
+        # Definir período mínimo e máximo da variante selecionada
+        df_var_total = df_shopify[df_shopify["variante"] == var_sel]
+        data_min, data_max = df_var_total["data"].min().date(), df_var_total["data"].max().date()
+        data_inicio, data_fim = st.date_input(f"Período para {var_sel}:", [data_min, data_max], key=f"date{i}")
+
+        # Filtrar dados pelo período selecionado
+        df_var = df_var_total[
+            (df_var_total["data"].dt.date >= data_inicio) &
+            (df_var_total["data"].dt.date <= data_fim)
+        ]
+
+        # Agrupar por dia e criar coluna de ponto
+        df_var = df_var.groupby(df_var["data"].dt.date)["itens"].sum().reset_index()
+        df_var["variante"] = f"{var_sel} (Comp {i+1})"
+        df_var["Ponto"] = range(1, len(df_var) + 1)  # eixo X: ponto 1, 2, 3...
+
+        df_todas = pd.concat([df_todas, df_var], ignore_index=True)
+
+    if not df_todas.empty:
+        fig = px.line(
+            df_todas,
+            x="Ponto",
+            y="itens",
+            color="variante",
+            markers=True,
+            hover_data={"data": True, "itens": True, "Ponto": True}
+        )
+        fig.update_layout(
+            xaxis_title="Ponto (comparativo)",
+            yaxis_title="Quantidade de Pedidos",
+            legend_title="Variante (Comparativo)"
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        # --- Cards com Insights ---
+        st.markdown("### 📊 Insights das Comparações")
+        colunas_cards = st.columns(num_comparacoes)
         for i in range(num_comparacoes):
-            st.markdown(f"### Comparação {i+1}")
-            var_sel = st.selectbox(f"Selecione a variante {i+1}:", variantes_disponiveis, key=f"var{i}")
-            data_min, data_max = df_shopify["data"].min().date(), df_shopify["data"].max().date()
-            data_inicio, data_fim = st.date_input(f"Período para {var_sel}:", [data_min, data_max], key=f"date{i}")
+            df_comp = df_todas[df_todas["variante"].str.endswith(f"(Comp {i+1})")]
+            total_itens = df_comp["itens"].sum()
+            media_itens = df_comp["itens"].mean() if len(df_comp) > 0 else 0
+            max_itens = df_comp["itens"].max() if len(df_comp) > 0 else 0
+            colunas_cards[i].metric(f"Variante {i+1}", f"{total_itens} itens", f"Média: {media_itens:.1f}, Máx: {max_itens}")
 
-            df_var = df_shopify[
-                (df_shopify["variante"] == var_sel) &
-                (df_shopify["data"].dt.date >= data_inicio) &
-                (df_shopify["data"].dt.date <= data_fim)
-            ]
-            df_var = df_var.groupby(df_var["data"].dt.date)["itens"].sum().reset_index()
-            df_var["variante"] = f"{var_sel} (Comp {i+1})"
-            df_var["x_ord"] = range(1, len(df_var)+1)
-            df_todas = pd.concat([df_todas, df_var])
-
-        if not df_todas.empty:
-            fig = px.line(df_todas, x="x_ord", y="itens", color="variante", markers=True, hover_data=["data"])
-            fig.update_layout(xaxis_title="Dia (comparativo)", yaxis_title="Qtd Pedidos")
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("Nenhuma comparação disponível.")
+    else:
+        st.info("Nenhuma comparação disponível para os períodos selecionados.")

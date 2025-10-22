@@ -294,11 +294,18 @@ elif opcao == "🚚 Logística Geral":
             st.success("✅ Status atualizado com sucesso no Google Sheets!")
 
     # ======================= TAB 2 ==============================
-    with tab2:
+  with tab2:
         st.subheader("📊 Pedidos por Produto")
         pedidos_produto = df_shopify.groupby("produto")["itens"].sum().reset_index()
-        pedidos_produto = pedidos_produto.rename(columns={"itens": "Qtd Pedidos"}).sort_values("Qtd Pedidos", ascending=False)
+        pedidos_produto = pedidos_produto.rename(columns={"itens": "Qtd Pedidos"})
+        pedidos_produto = pedidos_produto.sort_values("Qtd Pedidos", ascending=False)
         st.dataframe(pedidos_produto)
+
+        st.subheader("📊 Pedidos por Variante")
+        pedidos_variante = df_shopify.groupby(["produto", "variante"])["itens"].sum().reset_index()
+        pedidos_variante = pedidos_variante.rename(columns={"itens": "Qtd Pedidos"})
+        pedidos_variante = pedidos_variante.sort_values("Qtd Pedidos", ascending=False)
+        st.dataframe(pedidos_variante)
 
     # ======================= TAB 3 ==============================
     with tab3:

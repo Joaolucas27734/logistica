@@ -353,75 +353,75 @@ with tab2:
         st.plotly_chart(fig, use_container_width=True)
 
     # ===========================================================
-    # Comparação de 2 períodos
-    # ===========================================================
-    st.markdown("---")
-    st.subheader("⚖️ Comparação de 2 períodos")
+# Comparação de 2 períodos – barras empilhadas
+# ===========================================================
+st.markdown("---")
+st.subheader("⚖️ Comparação de 2 períodos – Total por variante (barras empilhadas)")
 
-    st.markdown("### Seleção de períodos")
-    p1_inicio, p1_fim = st.date_input("Período 1:", [data_min, data_max], key="p1_comp")
-    p2_inicio, p2_fim = st.date_input("Período 2:", [data_min, data_max], key="p2_comp")
+# Seleção de períodos
+p1_inicio, p1_fim = st.date_input("Período 1:", [data_min, data_max], key="p1_comp")
+p2_inicio, p2_fim = st.date_input("Período 2:", [data_min, data_max], key="p2_comp")
 
-    df_p1 = df_produto_total[
-        (df_produto_total["data"].dt.date >= p1_inicio) &
-        (df_produto_total["data"].dt.date <= p1_fim)
-    ]
-    df_p2 = df_produto_total[
-        (df_produto_total["data"].dt.date >= p2_inicio) &
-        (df_produto_total["data"].dt.date <= p2_fim)
-    ]
+df_p1 = df_produto_total[
+    (df_produto_total["data"].dt.date >= p1_inicio) &
+    (df_produto_total["data"].dt.date <= p1_fim)
+]
+df_p2 = df_produto_total[
+    (df_produto_total["data"].dt.date >= p2_inicio) &
+    (df_produto_total["data"].dt.date <= p2_fim)
+]
 
-    def resumo_periodo(df, nome):
-        if df.empty:
-            return pd.DataFrame(columns=["Variante", "Total Pedidos", "% do Total"])
-        df_sum = df.groupby("variante")["itens"].sum().reset_index()
-        df_sum["% do Total"] = df_sum["itens"] / df_sum["itens"].sum() * 100
-        df_sum = df_sum.rename(columns={"itens": "Total Pedidos"})
-        df_sum["Período"] = nome
-        return df_sum
+# Função para resumo empilhado
+def resumo_empilhado(df, nome):
+    if df.empty:
+        return pd.DataFrame(columns=["Variante", "Total Pedidos", "Período"])
+    df_sum = df.groupby("variante")["itens"].sum().reset_index()
+    df_sum = df_sum.rename(columns={"itens": "Total Pedidos"})
+    df_sum["Período"] = nome
+    return df_sum
 
-    df_r1 = resumo_periodo(df_p1, "Período 1")
-    df_r2 = resumo_periodo(df_p2, "Período 2")
-    df_compara = pd.concat([df_r1, df_r2], ignore_index=True)
+df_r1 = resumo_empilhado(df_p1, "Período 1")
+df_r2 = resumo_empilhado(df_p2, "Período 2")
+df_compara = pd.concat([df_r1, df_r2], ignore_index=True)
 
-    if not df_compara.empty:
-        # --- Gráfico de barras castelizado por variante e período ---
-        fig_comp = px.bar(
-            df_compara,
-            x="Variante",
-            y="Total Pedidos",
-            color="Período",
-            barmode="group",
-            text="Total Pedidos",
-            color_discrete_sequence=px.colors.qualitative.Set2,
-            title=f"Comparação de pedidos por variante – {produto_sel}"
-        )
-        fig_comp.update_traces(textposition='outside')
-        st.plotly_chart(fig_comp, use_container_width=True)
+if not df_compara.empty:
+    # Gráfico de barras empilhadas por período
+    fig_comp = px.bar(
+        df_compara,
+        x="Período",
+        y="Total Pedidos",
+        color="Variante",
+        text="Total Pedidos",
+        color_discrete_sequence=px.colors.qualitative.Set3,
+        title=f"Comparação de pedidos por variante – {produto_sel}",
+        labels={"Período": "Período", "Total Pedidos": "Pedidos", "Variante": "Variante"}
+    )
+    fig_comp.update_traces(textposition='inside')
+    st.plotly_chart(fig_comp, use_container_width=True)
 
-        # --- Insights automáticos ---
-        st.markdown("### 📌 Insights e Próximos Passos")
-        for var in df_compara["Variante"].unique():
-            t1 = df_r1[df_r1["Variante"] == var]["Total Pedidos"].sum() if var in df_r1["Variante"].values else 0
-            t2 = df_r2[df_r2["Variante"] == var]["Total Pedidos"].sum() if var in df_r2["Variante"].values else 0
-            diff = t2 - t1
-            pct = (diff / t1 * 100) if t1 > 0 else 0
-            if diff > 0:
-                st.markdown(f"✅ Variante **{var}** teve aumento de {diff} pedidos (+{pct:.1f}%) no período 2")
-            elif diff < 0:
-                st.markdown(f"📉 Variante **{var}** teve queda de {abs(diff)} pedidos ({pct:.1f}%) no período 2")
-            else:
-                st.markdown(f"⚖️ Variante **{var}** manteve a mesma quantidade de pedidos")
+    # Insights automáticos
+    st.markdown("### 📌 Insights e Próximos Passos")
+    todas_variantes = df_compara["Variante"].unique()
+    for var in todas_variantes:
+        t1 = df_r1[df_r1["Variante"] == var]["Total Pedidos"].sum() if var in df_r1["Variante"].values else 0
+        t2 = df_r2[df_r2["Variante"] == var]["Total Pedidos"].sum() if var in df_r2["Variante"].values else 0
+        diff = t2 - t1
+        pct = (diff / t1 * 100) if t1 > 0 else 0
+        if diff > 0:
+            st.markdown(f"✅ Variante **{var}** aumentou +{diff} pedidos (+{pct:.1f}%) no período 2")
+        elif diff < 0:
+            st.markdown(f"📉 Variante **{var}** caiu {abs(diff)} pedidos ({pct:.1f}%) no período 2")
+        else:
+            st.markdown(f"⚖️ Variante **{var}** manteve o mesmo número de pedidos")
 
-        st.markdown("""
-        💡 **Sugestões / Próximos passos:**
-        - Analisar quais fatores influenciaram o aumento ou queda de pedidos (promoções, estoque, sazonalidade).  
-        - Avaliar estoque das variantes mais populares para não faltar.  
-        - Planejar ações de marketing para variantes com queda de pedidos.  
-        - Repetir análise para outros produtos para decisões estratégicas.  
-        """)
-    else:
-        st.info("Nenhuma comparação disponível para os períodos selecionados.")
+    st.markdown("""
+    💡 **Sugestões / Próximos passos:**
+    - Analisar fatores que impactaram cada período (promoções, estoque, sazonalidade).  
+    - Verificar estoque das variantes mais vendidas.  
+    - Planejar ações de marketing para variantes com queda de pedidos.  
+    """)
+else:
+    st.info("Nenhuma comparação disponível para os períodos selecionados.")
 
 # ======================= TAB 3 ==============================
 with tab3:

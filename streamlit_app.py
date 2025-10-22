@@ -233,20 +233,21 @@ if opcao == "🚚 Logística Geral":
     with aba1:
         st.subheader("📋 Pedidos Normalizados (editável)")
 
-       df_editado = st.data_editor(
+    df_editado = st.data_editor(
     df_shopify[[
-        "data", "cliente", "Status", "produto", "variante", "itens", "forma_entrega", "estado", "cidade"
+        "data", "cliente", "Status", "produto", "variante", "itens", 
+        "forma_entrega", "estado", "cidade"
     ]],
     columns={
         "Status": st.column_config.SelectboxColumn(
-            "Status", 
-            options=["Aguardando", "Entregue", "Não entregue"]
+            "Status", options=["Aguardando", "Entregue", "Não entregue"]
         )
     },
     disabled=[col for col in df_shopify.columns if col != "Status"],
     num_rows="dynamic",
     use_container_width=True
 )
+
 
         # Salvar automaticamente alterações
         salvar_status_no_gsheet(df_editado)

@@ -303,6 +303,7 @@ with tab1:
             st.error(f"❌ Erro ao salvar no Google Sheets: {e}")
 
 # ======================= TAB 2 ==============================
+# ======================= TAB 2 ==============================
 with tab2:
     st.subheader("📊 Análises por Produto e Variante")
 
@@ -328,18 +329,29 @@ with tab2:
     st.markdown(f"### Quantidade de pedidos por variante – {produto_sel}")
     st.dataframe(qtd_variantes)
 
-    # --- Gráfico de pizza ---
+    # --- Gráfico de barras castelizado ---
     if not qtd_variantes.empty:
-        fig_pizza = px.pie(
+        fig_bar = px.bar(
             qtd_variantes,
-            names="variante",
-            values="Qtd Pedidos",
-            title=f"Distribuição de variantes do produto '{produto_sel}'",
-            hole=0.3
+            x="variante",
+            y="Qtd Pedidos",
+            text="Qtd Pedidos",
+            color="variante",
+            color_discrete_sequence=px.colors.qualitative.Set3,  # Paleta de cores castelizada
+            title=f"Distribuição de variantes do produto '{produto_sel}'"
         )
-        st.plotly_chart(fig_pizza, use_container_width=True)
+        fig_bar.update_traces(textposition='outside')
+        fig_bar.update_layout(
+            xaxis_title="Variante",
+            yaxis_title="Qtd Pedidos",
+            showlegend=False,
+            uniformtext_minsize=8,
+            uniformtext_mode='hide'
+        )
+        st.plotly_chart(fig_bar, use_container_width=True)
     else:
         st.info("Nenhum dado disponível para o período e produto selecionados.")
+
 
 
 # ======================= TAB 3 ==============================

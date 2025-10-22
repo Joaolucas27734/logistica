@@ -303,11 +303,20 @@ with tab1:
             st.error(f"❌ Erro ao salvar no Google Sheets: {e}")
 
 # ======================= TAB 2 ==============================
+# ======================= TAB 2 ==============================
 with tab2:
-    st.subheader("📊 Pedidos por Produto")
-    pedidos_produto = st.session_state.df_shopify_editor.groupby("produto")["itens"].sum().reset_index()
-    pedidos_produto = pedidos_produto.rename(columns={"itens": "Qtd Pedidos"}).sort_values("Qtd Pedidos", ascending=False)
-    st.dataframe(pedidos_produto)
+    st.subheader("📊 Pedidos por Produto e Variante")
+
+    # Agrupa por produto e variante
+    pedidos_produto_variante = st.session_state.df_shopify_editor.groupby(
+        ["produto", "variante"]
+    )["itens"].sum().reset_index()
+
+    pedidos_produto_variante = pedidos_produto_variante.rename(columns={"itens": "Qtd Pedidos"})
+    pedidos_produto_variante = pedidos_produto_variante.sort_values(["produto", "Qtd Pedidos"], ascending=[True, False])
+
+    st.dataframe(pedidos_produto_variante)
+
 
 # ======================= TAB 3 ==============================
 with tab3:

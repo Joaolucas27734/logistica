@@ -348,12 +348,43 @@ with tab4:
 
 # ======================= TAB 5 ==============================
 with tab5:
-    st.subheader("⚖️ Comparar Variantes")
+    st.subheader("⚖️ Comparar Variantes com Período")
+
     variantes = st.session_state.df_shopify_editor["variante"].dropna().unique()
+    
+    # Seleção de variantes
     var1 = st.selectbox("Variante 1", variantes, key="v1")
     var2 = st.selectbox("Variante 2", variantes, key="v2")
-    df_comp = st.session_state.df_shopify_editor[st.session_state.df_shopify_editor["variante"].isin([var1, var2])]
-    df_comp = df_comp.groupby(["variante", df_comp["data"].dt.date])["itens"].sum().reset_index()
-    df_comp.columns = ["variante", "Data", "Qtd Pedidos"]
-    fig = px.line(df_comp, x="Data", y="Qtd Pedidos", color="variante", markers=True, title="Comparativo de Variantes")
-    st.plotly_chart(fig, use_container_width=True)
+
+    # Seleção de períodos para cada variante
+    st.markdown("### ⏳ Período da Variante 1")
+    data_inicio_v1, data_fim_v1 = st.date_input("Selecione o período da Variante 1:", 
+                                                [st.session_state.df_shopify_editor["data"].min().date(),
+                                                 st.session_state.df_shopify_editor["data"].max().date()], key="periodo1")
+    
+    st.markdown("### ⏳ Período da Variante 2")
+    data_inicio_v2, data_fim_v2 = st.date_input("Selecione o período da Variante 2:", 
+                                                [st.session_state.df_shopify_editor["data"].min().date(),
+                                                 st.session_state.df_shopify_editor["data"].max().date()], key="periodo2")
+
+    # Filtrar dados de acordo com variante e período
+    df_var1 = st.session_state.df_shopify_editor[
+        (st.session_state.df_shopify_editor["variante"] == var1) &
+        (st.session_state.df_shopify_editor["data"].dt.date >= data_inicio_v1) &
+        (st.session_state.df_shopify_editor["data"].dt.date <= data_fim_v1)
+    ]
+    df_var2 = st.session_state.df_shopify_editor[
+        (st.session_state.df_shopify_editor["variante"] == var2) &
+        (st.session_state.df_shopify_editor["data"].dt.date >= data_inicio_v2) &
+        (st.session_state.df_shopify_editor["data"].dt.date <= data_fim_v2)
+    ]
+
+    # Agrupar por data
+    df_comp = pd.concat([
+        df_var1.groupby(df_var1["data"].dt.date)["itens"].sum().reset_index().assign(variante=var1),
+        df_var2.groupby(df_var2["data"].dt.date)["itens"].sum().reset_index().assign(variante=var2)
+    ])
+    df_comp.columns = ["Data", "Qtd Pedidos", "variante"]
+
+    # Gráfico de linhas
+    fig = px.line(df_comp, x="Data", y="Qtd Pedidos", color="variante", markers=True, tit_

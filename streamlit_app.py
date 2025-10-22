@@ -212,10 +212,17 @@ if opcao == "🚚 Logística Geral":
     ])
 
     # --- Aba 1: Pedidos Normalizados ---
-    with aba1:
-        st.dataframe(df_shopify[[
-            "data", "cliente", "Status", "produto", "variante", "itens", "forma_entrega", "estado", "cidade"
-        ]])
+with aba1:
+    # --- Filtro de Status ---
+    status_disponiveis = df_shopify["Status"].dropna().unique()
+    status_selecionados = st.multiselect("Filtrar por Status:", options=status_disponiveis, default=status_disponiveis)
+
+    # --- Aplicar filtro ---
+    df_filtrado = df_shopify[df_shopify["Status"].isin(status_selecionados)]
+
+    st.dataframe(df_filtrado[[
+        "data", "cliente", "Status", "produto", "variante", "itens", "forma_entrega", "estado", "cidade"
+    ]])
 
     # --- Aba 2: Produtos e Variantes ---
     with aba2:

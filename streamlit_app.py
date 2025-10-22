@@ -153,6 +153,7 @@ if opcao == "🚚 Logística Geral":
             pedidos_total.extend(pedidos)
             contador += 1
 
+            # Paginação
             link_header = response.headers.get("Link", "")
             next_url = None
             if 'rel="next"' in link_header:
@@ -170,11 +171,12 @@ if opcao == "🚚 Logística Geral":
         linhas = []
         for pedido in pedidos_total:
             if pedido.get("financial_status") != "paid":
-                continue  # ✅ Filtra apenas pedidos pagos
+                continue  # ✅ Apenas pedidos pagos
 
             line_items = pedido.get("line_items", [])
             for item in line_items:
                 linha = {
+                    "id": pedido.get("id"),
                     "data": pedido.get("created_at"),
                     "cliente": (pedido.get("customer") or {}).get("first_name", "") + " " +
                                (pedido.get("customer") or {}).get("last_name", ""),
@@ -247,7 +249,8 @@ if opcao == "🚚 Logística Geral":
         variante_sel = st.selectbox("Selecione a variante:", variantes_disponiveis)
         df_variante = df_shopify[df_shopify["variante"] == variante_sel]
         df_tendencia = df_variante.groupby(df_variante["data"].dt.date)["itens"].sum().reset_index()
-        fig = px.line(df_tendencia, x="data", y="itens", markers=True, title=f"Tendência da Variante {variante_sel}")
+        df_tendencia = df_tendencia.rename(columns={"data": "Data", "itens": "Qtd Pedidos"})
+        fig = px.line(df_tendencia, x="Data", y="Qtd Pedidos", markers=True, title=f"Tendência da Variante {variante_sel}")
         st.plotly_chart(fig, use_container_width=True)
 
     # --- Aba 5: Comparar Variantes ---

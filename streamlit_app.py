@@ -230,27 +230,25 @@ if opcao == "🚚 Logística Geral":
     ])
 
     # --- Aba 1: Pedidos Normalizados ---
-    with aba1:
-        st.subheader("📋 Pedidos Normalizados (editável)")
+with aba1:
+    st.subheader("📋 Pedidos Normalizados (editável)")
 
     df_editado = st.data_editor(
-    df_shopify[[
-        "data", "cliente", "Status", "produto", "variante", "itens", 
-        "forma_entrega", "estado", "cidade"
-    ]],
-    columns={
-        "Status": st.column_config.SelectboxColumn(
-            "Status", options=["Aguardando", "Entregue", "Não entregue"]
-        )
-    },
-    disabled=[col for col in df_shopify.columns if col != "Status"],
-    num_rows="dynamic",
-    use_container_width=True
-)
+        df_shopify[[
+            "data", "cliente", "Status", "produto", "variante", "itens", "forma_entrega", "estado", "cidade"
+        ]],
+        columns={
+            "Status": st.column_config.SelectboxColumn(
+                "Status", options=["Aguardando", "Entregue", "Não entregue"]
+            )
+        },
+        disabled=[col for col in df_shopify.columns if col != "Status"],
+        num_rows="dynamic",
+        use_container_width=True
+    )
 
-
-        # Salvar automaticamente alterações
-        salvar_status_no_gsheet(df_editado)
+    # Salvar automaticamente alterações no Google Sheets
+    salvar_status_no_gsheet(df_editado)
 
     # --- Aba 2: Produtos e Variantes ---
     with aba2:

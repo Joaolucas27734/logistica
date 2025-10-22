@@ -11,9 +11,17 @@ st.set_page_config(page_title="Dashboard Interativo de Entregas + Estoque", layo
 st.title("📦 Dashboard Interativo – Entregas & Estoque")
 
 # --- Configurar Google Sheets ---
+import json
+from google.oauth2.service_account import Credentials
+
 SCOPE = ["https://www.googleapis.com/auth/spreadsheets"]
-CREDS = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=SCOPE)
+
+# Corrige leitura do JSON do service account
+creds_dict = json.loads(st.secrets["gcp_service_account"]["json"])
+CREDS = Credentials.from_service_account_info(creds_dict, scopes=SCOPE)
+
 GSHEET_CLIENT = gspread.authorize(CREDS)
+
 SHEET_ID = "1dYVZjzCtDBaJ6QdM81WP2k51QodDGZHzKEhzKHSp7v8"
 SHEET_NAME = "Pedidos"  # nome da aba onde será salvo
 

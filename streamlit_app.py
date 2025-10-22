@@ -16,11 +16,10 @@ from google.oauth2.service_account import Credentials
 
 SCOPE = ["https://www.googleapis.com/auth/spreadsheets"]
 
+# Carrega o JSON do service account do secrets
 creds_dict = json.loads(st.secrets["gcp_service_account"]["json"])
 CREDS = Credentials.from_service_account_info(creds_dict, scopes=SCOPE)
 GSHEET_CLIENT = gspread.authorize(CREDS)
-
-
 SHEET_ID = "1dYVZjzCtDBaJ6QdM81WP2k51QodDGZHzKEhzKHSp7v8"
 SHEET_NAME = "Pedidos"  # nome da aba onde será salvo
 

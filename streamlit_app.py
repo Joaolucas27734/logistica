@@ -333,6 +333,7 @@ with tab2:
         # --- Total por variante ---
         df_total_var = df_group.groupby("variante")["Qtd Pedidos"].sum().reset_index()
         df_total_var["% do Total"] = df_total_var["Qtd Pedidos"] / df_total_var["Qtd Pedidos"].sum() * 100
+        df_total_var["% do Total"] = df_total_var["% do Total"].map("{:.2f}%".format)
 
         st.markdown("### 📊 Total de Pedidos por Variante")
         st.dataframe(df_total_var.sort_values("Qtd Pedidos", ascending=False))
@@ -341,12 +342,11 @@ with tab2:
         st.markdown("### 📈 Pedidos por Variante ao longo dos dias (Total por dia)")
 
         # Agrupar por dia para totalizar cada barra
-        df_stack = df_group.copy()
-        df_stack_totais = df_stack.groupby("Data")["Qtd Pedidos"].sum().reset_index()
+        df_stack_totais = df_group.groupby("Data")["Qtd Pedidos"].sum().reset_index()
         df_stack_totais = df_stack_totais.rename(columns={"Qtd Pedidos": "Total Diário"})
 
         fig = px.bar(
-            df_stack,
+            df_group,
             x="Data",
             y="Qtd Pedidos",
             color="variante",
@@ -375,7 +375,7 @@ with tab2:
         total_pedidos = df_group["Qtd Pedidos"].sum()
         top_variante = df_total_var.sort_values("Qtd Pedidos", ascending=False).iloc[0]
         st.write(f"- Total de pedidos no período: **{total_pedidos}**")
-        st.write(f"- Variante mais vendida: **{top_variante['variante']}** com **{top_variante['Qtd Pedidos']} pedidos ({top_variante['% do Total']:.1f}%)**")
+        st.write(f"- Variante mais vendida: **{top_variante['variante']}** com **{top_variante['Qtd Pedidos']} pedidos ({top_variante['% do Total']})**")
         st.write("- O gráfico mostra claramente a contribuição de cada variante para o total diário.")
 
 # ======================= TAB 3 ==============================

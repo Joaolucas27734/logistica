@@ -387,4 +387,19 @@ with tab5:
     df_comp.columns = ["Data", "Qtd Pedidos", "variante"]
 
     # Gráfico de linhas
-    fig = px.line(df_comp, x="Data", y="Qtd Pedidos", color="variante", markers=True, tit_
+    fig = px.line(df_comp, x="Data", y="Qtd Pedidos", color="variante", markers=True, title="Comparativo de Variantes")
+    st.plotly_chart(fig, use_container_width=True)
+
+    # ===================== Insights / Cards =====================
+    total_var1 = df_var1["itens"].sum()
+    total_var2 = df_var2["itens"].sum()
+    mais_vendida = var1 if total_var1 > total_var2 else var2
+    diferenca_pct = abs(total_var1 - total_var2) / max(total_var1, total_var2) * 100 if max(total_var1, total_var2) > 0 else 0
+
+    st.markdown("### 📊 Resumo da Comparação")
+    c1, c2, c3 = st.columns(3)
+    c1.metric(f"Total {var1}", total_var1)
+    c2.metric(f"Total {var2}", total_var2)
+    c3.metric("Diferença (%)", f"{diferenca_pct:.1f}%", delta=f"{'+' if total_var1>total_var2 else '-'}{diferenca_pct:.1f}%")
+    
+    st.markdown(f"✅ Variante mais vendida no período: **{mais_vendida}**")

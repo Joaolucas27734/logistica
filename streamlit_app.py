@@ -1,17 +1,35 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import math
 import requests
+import gspread
+from google.oauth2.service_account import Credentials
 
 # --- Configuração da página ---
 st.set_page_config(page_title="Dashboard Interativo de Entregas + Estoque", layout="wide")
 st.title("📦 Dashboard Interativo – Entregas & Estoque")
 
+# --- Configurar Google Sheets ---
+SCOPE = ["https://www.googleapis.com/auth/spreadsheets"]
+CREDS = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=SCOPE)
+GSHEET_CLIENT = gspread.authorize(CREDS)
+SHEET_ID = "1dYVZjzCtDBaJ6QdM81WP2k51QodDGZHzKEhzKHSp7v8"
+SHEET_NAME = "Pedidos"  # nome da aba onde será salvo
+
+def salvar_status_no_gsheet(df):
+    """Salva automaticamente a coluna Status na planilha Google Sheets"""
+    try:
+        sheet = GSHEET_CLIENT.open_by_key(SHEET_ID).worksheet(SHEET_NAME)
+        col_idx = sheet.find("Status").col  # encontra a coluna "Status"
+        # Atualiza cada célula da coluna Status
+        for i, status in enumerate(df["Status"], start=2):  # assumindo que linha 1 é cabeçalho
+            sheet.update_cell(i, col_idx, status)
+    except Exception as e:
+        st.error(f"Erro ao salvar no Google Sheets: {e}")
+
 # --- Ler planilha de pedidos ---
-sheet_id = "1dYVZjzCtDBaJ6QdM81WP2k51QodDGZHzKEhzKHSp7v8"
-url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
+url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&sheet={SHEET_NAME}"
 df = pd.read_csv(url)
 
 # --- Processar datas ---
@@ -213,22 +231,22 @@ if opcao == "🚚 Logística Geral":
 
     # --- Aba 1: Pedidos Normalizados ---
 with aba1:
-    st.subheader("📋 Pedidos Normalizados (editável)")
+        st.subheader("📋 Pedidos Normalizados (editável)")
 
-    df_editado = st.data_editor(
-        df_shopify[[
-            "data", "cliente", "Status", "produto", "variante", "itens", "forma_entrega", "estado", "cidade"
-        ]],
-        columns={
-            "Status": st.column_config.SelectboxColumn("Status", options=["Aguardando"])
-        },
-        disabled=[col for col in df_shopify.columns if col != "Status"],
-        num_rows="dynamic",
-        use_container_width=True
-    )
+        df_editado = st.data_editor(
+            df_shopify[[
+                "data", "cliente", "Status", "produto", "variante", "itens", "forma_entrega", "estado", "cidade"
+            ]],
+            columns={
+                "Status": st.column_config.SelectboxColumn("Status", options=["Aguardando", "Entregue", "Não entregue"])
+            },
+            disabled=[col for col in df_shopify.columns if col != "Status"],
+            num_rows="dynamic",
+            use_container_width=True
+        )
 
-    # Atualiza planilha automaticamente
-    salvar_status(df_editado)
+        # Salvar automaticamente alterações
+        salvar_status_no_gsheet(df_editado)
 
     # --- Aba 2: Produtos e Variantes ---
     with aba2:

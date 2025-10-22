@@ -314,7 +314,9 @@ with tab2:
     variantes_disponiveis = st.session_state.df_shopify_editor[
         st.session_state.df_shopify_editor["produto"] == produto_sel
     ]["variante"].dropna().unique()
-    variantes_sel = st.multiselect("Selecione as variantes para comparar:", variantes_disponiveis, default=list(variantes_disponiveis[:2]))
+    variantes_sel = st.multiselect(
+        "Selecione as variantes para comparar:", variantes_disponiveis, default=list(variantes_disponiveis[:2])
+    )
 
     if len(variantes_sel) < 2:
         st.warning("Selecione pelo menos 2 variantes para comparar.")
@@ -350,7 +352,9 @@ with tab2:
         def agrupar_totais(df, label):
             df_group = df.groupby("variante")["itens"].sum().reset_index()
             df_group["%_Total"] = (df_group["itens"] / df_group["itens"].sum() * 100).round(2)
-            df_group = df_group.rename(columns={"itens": f"Pedidos ({label})", "%_Total": f"% ({label})"})
+            df_group = df_group.rename(
+                columns={"itens": f"Pedidos ({label})", "%_Total": f"% ({label})"}
+            )
             return df_group
 
         df_total1 = agrupar_totais(df_periodo1, "Período 1")
@@ -364,7 +368,10 @@ with tab2:
         # --- Gráfico empilhado por período ---
         st.markdown("### 📈 Gráfico comparativo de variantes – Totais por Período")
         df_grafico = pd.DataFrame()
-        for label, df_p in zip([f"Período 1 ({data_inicio1} a {data_fim1})", f"Período 2 ({data_inicio2} a {data_fim2})"], [df_periodo1, df_periodo2]):
+        for label, df_p in zip(
+            [f"Período 1 ({data_inicio1} a {data_fim1})", f"Período 2 ({data_inicio2} a {data_fim2})"],
+            [df_periodo1, df_periodo2]
+        ):
             df_tmp = df_p.groupby("variante")["itens"].sum().reset_index()
             df_tmp["Período"] = label
             df_grafico = pd.concat([df_grafico, df_tmp], ignore_index=True)
@@ -397,14 +404,17 @@ with tab2:
 
         # --- Insights ---
         st.markdown("### 📝 Insights")
-        for label, df_p in zip([f"Período 1 ({data_inicio1} a {data_fim1})", f"Período 2 ({data_inicio2} a {data_fim2})"], [df_periodo1, df_periodo2]):
+        for label, df_p in zip(
+            [f"Período 1 ({data_inicio1} a {data_fim1})", f"Período 2 ({data_inicio2} a {data_fim2})"],
+            [df_periodo1, df_periodo2]
+        ):
             total_pedidos = df_p["itens"].sum()
             if total_pedidos > 0:
                 top_var = df_p.groupby("variante")["itens"].sum().idxmax()
                 qtd_top = df_p.groupby("variante")["itens"].sum().max()
                 pct_top = qtd_top / total_pedidos * 100
                 st.write(f"- {label}: Total de pedidos: **{total_pedidos}**, Variante mais vendida: **{top_var} ({qtd_top} pedidos, {pct_top:.2f}%)**")
-)
+
 
 # ======================= TAB 3 ==============================
 with tab3:

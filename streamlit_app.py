@@ -314,19 +314,19 @@ with tab1:
         ]
     )
 
-    # --- Botão para salvar ---
+      # --- Botão para salvar ---
     if st.button("💾 Salvar alterações"):
-    st.session_state.df_shopify_editor["Status"] = df_editado["Status"]
-    st.session_state.df_shopify_editor["Codigo de rastreio"] = df_editado["Codigo de rastreio"]
-    st.session_state.df_shopify_editor["Situacao"] = df_editado["Situacao"]
+        st.session_state.df_shopify_editor["Status"] = df_editado["Status"]
+        st.session_state.df_shopify_editor["Codigo de rastreio"] = df_editado["Codigo de rastreio"]
+        st.session_state.df_shopify_editor["Situacao"] = df_editado["Situacao"]
 
-    # --- Atualizar Google Sheets ---
-    try:
-        worksheet.clear()
-        worksheet.update(df_para_lista(st.session_state.df_shopify_editor))
-        st.success("✅ Alterações salvas com sucesso no Google Sheets!")
-    except Exception as e:
-        st.error(f"❌ Erro ao salvar no Google Sheets: {e}")
+        try:
+            worksheet.clear()
+            worksheet.update(df_para_lista(st.session_state.df_shopify_editor))
+            st.success("✅ Alterações salvas com sucesso no Google Sheets!")
+        except Exception as e:
+            st.error(f"❌ Erro ao salvar no Google Sheets: {e}")
+
 
     # --- Atualizar automaticamente na Shopify ---
     try:

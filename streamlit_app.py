@@ -213,16 +213,26 @@ if opcao == "🚚 Logística Geral":
 
     # --- Aba 1: Pedidos Normalizados ---
 with aba1:
-    # --- Filtro de Status ---
-    status_disponiveis = df_shopify["Status"].dropna().unique()
-    status_selecionados = st.multiselect("Filtrar por Status:", options=status_disponiveis, default=status_disponiveis)
+    st.subheader("📋 Pedidos Normalizados (editável)")
 
-    # --- Aplicar filtro ---
-    df_filtrado = df_shopify[df_shopify["Status"].isin(status_selecionados)]
+    # Editor interativo
+    df_editado = st.data_editor(
+        df_shopify[[
+            "data", "cliente", "Status", "produto", "variante", "itens", "forma_entrega", "estado", "cidade"
+        ]],
+        num_rows="dynamic",  # permite adicionar linhas se quiser
+        use_container_width=True
+    )
 
-    st.dataframe(df_filtrado[[
-        "data", "cliente", "Status", "produto", "variante", "itens", "forma_entrega", "estado", "cidade"
-    ]])
+    # Mostrar resumo de alterações
+    if not df_editado.equals(df_shopify):
+        st.success("✅ Alterações detectadas! (ainda não salvas permanentemente)")
+
+        # Botão para salvar
+        if st.button("💾 Salvar alterações"):
+            df_editado.to_csv("pedidos_editados.csv", index=False)
+            st.info("Alterações salvas no arquivo 'pedidos_editados.csv'.")
+
 
     # --- Aba 2: Produtos e Variantes ---
     with aba2:

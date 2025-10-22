@@ -262,74 +262,84 @@ elif opcao == "🚚 Logística Geral":
     ])
 
     # ======================= TAB 1 ==============================
-    with tab1:
-        st.subheader("🧾 Pedidos Pagos da Shopify")
+with tab1:
+    st.subheader("🧾 Pedidos Pagos da Shopify")
 
-        colunas = [
-            "data", "cliente", "Status", "produto", "variante",
-            "itens", "forma_entrega", "estado", "cidade", "pagamento"
-        ]
+    colunas = [
+        "data", "cliente", "Status", "produto", "variante",
+        "itens", "forma_entrega", "estado", "cidade", "pagamento"
+    ]
 
-        st.info("👉 Você pode editar o campo **Status** diretamente na tabela abaixo.")
-        df_editado = st.data_editor(
-            df_shopify[colunas],
-            key="editor_pedidos",
-            hide_index=True,
-            column_config={
-                "Status": st.column_config.SelectboxColumn(
-                    "Status",
-                    options=["Aguardando", "Em transporte", "Entregue", "Cancelado"],
-                    required=True
-                ),
-                "pagamento": st.column_config.TextColumn("Situação Pagamento", disabled=True),
-                "data": st.column_config.DatetimeColumn("Data do Pedido", format="DD/MM/YYYY HH:mm")
-            },
-            disabled=["data", "cliente", "produto", "variante", "itens", "forma_entrega", "estado", "cidade", "pagamento"]
-        )
+    # Inicializa o DataFrame do editor na sessão, se ainda não existir
+    if "df_shopify_editor" not in st.session_state:
+        st.session_state.df_shopify_editor = df_shopify[colunas].copy()
 
-        if st.button("💾 Salvar alterações no Status"):
-            df_shopify["Status"] = df_editado["Status"]
+    st.info("👉 Você pode editar o campo **Status** diretamente na tabela abaixo.")
+    
+    df_editado = st.data_editor(
+        st.session_state.df_shopify_editor,
+        key="editor_pedidos",
+        hide_index=True,
+        column_config={
+            "Status": st.column_config.SelectboxColumn(
+                "Status",
+                options=["Aguardando", "Em transporte", "Entregue", "Cancelado"],
+                required=True
+            ),
+            "pagamento": st.column_config.TextColumn("Situação Pagamento", disabled=True),
+            "data": st.column_config.DatetimeColumn("Data do Pedido", format="DD/MM/YYYY HH:mm")
+        },
+        disabled=["data", "cliente", "produto", "variante", "itens", "forma_entrega", "estado", "cidade", "pagamento"]
+    )
+
+    # Botão para salvar alterações
+    if st.button("💾 Salvar alterações no Status"):
+        st.session_state.df_shopify_editor["Status"] = df_editado["Status"]
+        try:
             worksheet.clear()
-            worksheet.update(df_para_lista(df_shopify))
+            worksheet.update(df_para_lista(st.session_state.df_shopify_editor))
             st.success("✅ Status atualizado com sucesso no Google Sheets!")
+        except Exception as e:
+            st.error(f"❌ Erro ao salvar no Google Sheets: {e}")
 
-    # ======================= TAB 2 ==============================
-  with tab2:
-        st.subheader("📊 Pedidos por Produto")
-        pedidos_produto = df_shopify.groupby("produto")["itens"].sum().reset_index()
-        pedidos_produto = pedidos_produto.rename(columns={"itens": "Qtd Pedidos"})
-        pedidos_produto = pedidos_produto.sort_values("Qtd Pedidos", ascending=False)
-        st.dataframe(pedidos_produto)
+# ======================= TAB 2 ==============================
+with tab2:
+    st.subheader("📊 Pedidos por Produto")
+    pedidos_produto = st.session_state.df_shopify_editor.groupby("produto")["itens"].sum().reset_index()
+    pedidos_produto = pedidos_produto.rename(columns={"itens": "Qtd Pedidos"}).sort_values("Qtd Pedidos", ascending=False)
+    st.dataframe(pedidos_produto)
 
-        st.subheader("📊 Pedidos por Variante")
-        pedidos_variante = df_shopify.groupby(["produto", "variante"])["itens"].sum().reset_index()
-        pedidos_variante = pedidos_variante.rename(columns={"itens": "Qtd Pedidos"})
-        pedidos_variante = pedidos_variante.sort_values("Qtd Pedidos", ascending=False)
-        st.dataframe(pedidos_variante)
+# ======================= TAB 3 ==============================
+with tab3:
+    st.subheader("🏙️ Pedidos por Localização")
+    pedidos_estado = st.session_state.df_shopify_editor.groupby("estado")["itens"].sum().reset_index().sort_values("itens", ascending=False)
+    pedidos_cidade = st.session_state.df_shopify_editor.groupby("cidade")["itens"].sum().reset_index().sort_values("itens", ascending=False)
 
-    # ======================= TAB 3 ==============================
-    with tab3:
-        st.subheader("🏙️ Pedidos por Localização")
-        pedidos_estado = df_shopify.groupby("estado")["itens"].sum().reset_index().sort_values("itens", ascending=False)
-        st.dataframe(pedidos_estado)
+    st.markdown("### 📍 Por Estado")
+    st.dataframe(pedidos_estado)
+    
+    st.markdown("### 🏙️ Por Cidade")
+    st.dataframe(pedidos_cidade)
 
-    # ======================= TAB 4 ==============================
-    with tab4:
-        st.subheader("📈 Tendência de Pedidos por Variante")
-        variantes_disponiveis = df_shopify["variante"].dropna().unique()
-        variante_sel = st.selectbox("Selecione a variante:", variantes_disponiveis)
-        df_var = df_shopify[df_shopify["variante"] == variante_sel]
-        df_trend = df_var.groupby(df_var["data"].dt.date)["itens"].sum().reset_index()
-        fig = px.line(df_trend, x="data", y="itens", markers=True, title=f"Tendência: {variante_sel}")
-        st.plotly_chart(fig, use_container_width=True)
+# ======================= TAB 4 ==============================
+with tab4:
+    st.subheader("📈 Tendência de Pedidos por Variante")
+    variantes_disponiveis = st.session_state.df_shopify_editor["variante"].dropna().unique()
+    variante_sel = st.selectbox("Selecione a variante:", variantes_disponiveis)
+    df_var = st.session_state.df_shopify_editor[st.session_state.df_shopify_editor["variante"] == variante_sel]
+    df_trend = df_var.groupby(df_var["data"].dt.date)["itens"].sum().reset_index()
+    df_trend.columns = ["Data", "Qtd Pedidos"]
+    fig = px.line(df_trend, x="Data", y="Qtd Pedidos", markers=True, title=f"Tendência: {variante_sel}")
+    st.plotly_chart(fig, use_container_width=True)
 
-    # ======================= TAB 5 ==============================
-    with tab5:
-        st.subheader("⚖️ Comparar Variantes")
-        variantes = df_shopify["variante"].dropna().unique()
-        var1 = st.selectbox("Variante 1", variantes, key="v1")
-        var2 = st.selectbox("Variante 2", variantes, key="v2")
-        df_comp = df_shopify[df_shopify["variante"].isin([var1, var2])]
-        df_comp = df_comp.groupby(["variante", df_comp["data"].dt.date])["itens"].sum().reset_index()
-        fig = px.line(df_comp, x="data", y="itens", color="variante", markers=True, title="Comparativo de Variantes")
-        st.plotly_chart(fig, use_container_width=True)
+# ======================= TAB 5 ==============================
+with tab5:
+    st.subheader("⚖️ Comparar Variantes")
+    variantes = st.session_state.df_shopify_editor["variante"].dropna().unique()
+    var1 = st.selectbox("Variante 1", variantes, key="v1")
+    var2 = st.selectbox("Variante 2", variantes, key="v2")
+    df_comp = st.session_state.df_shopify_editor[st.session_state.df_shopify_editor["variante"].isin([var1, var2])]
+    df_comp = df_comp.groupby(["variante", df_comp["data"].dt.date])["itens"].sum().reset_index()
+    df_comp.columns = ["variante", "Data", "Qtd Pedidos"]
+    fig = px.line(df_comp, x="Data", y="Qtd Pedidos", color="variante", markers=True, title="Comparativo de Variantes")
+    st.plotly_chart(fig, use_container_width=True)

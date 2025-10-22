@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -302,84 +303,55 @@ with tab1:
         except Exception as e:
             st.error(f"❌ Erro ao salvar no Google Sheets: {e}")
 
-# ======================= TAB: Comparar Variantes com 2 períodos ==============================
-with tab5:
-    st.subheader("⚖️ Comparar Variantes em 2 períodos")
+# ======================= TAB 2 ==============================
+# ======================= TAB 2 ==============================
+with tab2:
+    st.subheader("📊 Análises por Produto e Variante")
 
-    # Seleção de variantes
-    variantes_disponiveis = st.session_state.df_shopify_editor["variante"].dropna().unique()
-    var1 = st.selectbox("Variante 1:", variantes_disponiveis, key="var1_cmp")
-    var2 = st.selectbox("Variante 2:", variantes_disponiveis, key="var2_cmp")
+    # --- Filtrar por data ---
+    data_min, data_max = df_shopify["data"].min().date(), df_shopify["data"].max().date()
+    data_inicio, data_fim = st.date_input("Selecione o período:", [data_min, data_max], key="analise_data")
 
-    # Seleção de períodos
-    data_min_total = st.session_state.df_shopify_editor["data"].min().date()
-    data_max_total = st.session_state.df_shopify_editor["data"].max().date()
+    df_filtrado = df_shopify[
+        (df_shopify["data"].dt.date >= data_inicio) &
+        (df_shopify["data"].dt.date <= data_fim)
+    ]
+
+    # --- Seleção de produto ---
+    produtos_disponiveis = df_filtrado["produto"].dropna().unique()
+    produto_sel = st.selectbox("Selecione o produto:", produtos_disponiveis)
+
+    df_produto = df_filtrado[df_filtrado["produto"] == produto_sel]
+
+    # --- Quantidade por variante ---
+    qtd_variantes = df_produto.groupby("variante")["itens"].sum().reset_index().sort_values("itens", ascending=False)
+    qtd_variantes = qtd_variantes.rename(columns={"itens": "Qtd Pedidos"})
     
-    st.markdown("### Período 1")
-    p1_inicio, p1_fim = st.date_input("Escolha o período 1:", [data_min_total, data_max_total], key="p1")
-    
-    st.markdown("### Período 2")
-    p2_inicio, p2_fim = st.date_input("Escolha o período 2:", [data_min_total, data_max_total], key="p2")
+    st.markdown(f"### Quantidade de pedidos por variante – {produto_sel}")
+    st.dataframe(qtd_variantes)
 
-    # Função para gerar gráfico de barras por variante e período
-    def gerar_grafico(variante, inicio, fim):
-        df_filtro = st.session_state.df_shopify_editor[
-            (st.session_state.df_shopify_editor["variante"] == variante) &
-            (st.session_state.df_shopify_editor["data"].dt.date >= inicio) &
-            (st.session_state.df_shopify_editor["data"].dt.date <= fim)
-        ]
-        if df_filtro.empty:
-            return None
-        df_group = df_filtro.groupby(df_filtro["data"].dt.date)["itens"].sum().reset_index()
-        df_group.columns = ["Data", "Qtd Pedidos"]
-        df_group["Variante"] = variante
-        fig = px.bar(
-            df_group,
-            x="Data",
+    # --- Gráfico de barras castelizado ---
+    if not qtd_variantes.empty:
+        fig_bar = px.bar(
+            qtd_variantes,
+            x="variante",
             y="Qtd Pedidos",
-            color="Variante",
-            barmode="stack",
             text="Qtd Pedidos",
-            color_discrete_sequence=px.colors.qualitative.Set3,
-            title=f"{variante} de {inicio} a {fim}"
+            color="variante",
+            color_discrete_sequence=px.colors.qualitative.Set3,  # Paleta de cores castelizada
+            title=f"Distribuição de variantes do produto '{produto_sel}'"
         )
-        fig.update_layout(xaxis_tickformat="%d/%m/%Y")
-        return fig, df_group
-
-    # --- Gerar gráficos ---
-    fig1, df1 = gerar_grafico(var1, p1_inicio, p1_fim) or (None, None)
-    fig2, df2 = gerar_grafico(var2, p2_inicio, p2_fim) or (None, None)
-
-    if fig1:
-        st.plotly_chart(fig1, use_container_width=True)
+        fig_bar.update_traces(textposition='outside')
+        fig_bar.update_layout(
+            xaxis_title="Variante",
+            yaxis_title="Qtd Pedidos",
+            showlegend=False,
+            uniformtext_minsize=8,
+            uniformtext_mode='hide'
+        )
+        st.plotly_chart(fig_bar, use_container_width=True)
     else:
-        st.info(f"Nenhum pedido para {var1} no período 1.")
-
-    if fig2:
-        st.plotly_chart(fig2, use_container_width=True)
-    else:
-        st.info(f"Nenhum pedido para {var2} no período 2.")
-
-    # --- Cards de resumo ---
-    st.subheader("📌 Conclusões")
-    col1, col2, col3, col4 = st.columns(4)
-
-    total1 = df1["Qtd Pedidos"].sum() if df1 is not None else 0
-    total2 = df2["Qtd Pedidos"].sum() if df2 is not None else 0
-
-    media1 = df1["Qtd Pedidos"].mean() if df1 is not None else 0
-    media2 = df2["Qtd Pedidos"].mean() if df2 is not None else 0
-
-    max1 = df1["Qtd Pedidos"].max() if df1 is not None else 0
-    max2 = df2["Qtd Pedidos"].max() if df2 is not None else 0
-
-    col1.metric(f"{var1} - Total pedidos", total1)
-    col2.metric(f"{var2} - Total pedidos", total2)
-    col3.metric(f"{var1} - Média diária", f"{media1:.1f}")
-    col4.metric(f"{var2} - Média diária", f"{media2:.1f}")
-
-    st.markdown(f"✅ O período com mais pedidos foi **{var1 if total1 > total2 else var2}**")
-    st.markdown(f"✅ Maior quantidade em um único dia: **{max(var1, var2)}**")
+        st.info("Nenhum dado disponível para o período e produto selecionados.")
 
 
 
@@ -408,88 +380,60 @@ with tab4:
 
 # ======================= TAB 5 ==============================
 with tab5:
-    st.subheader("⚖️ Comparar Variantes em 2 períodos")
-
-    variantes_disponiveis = st.session_state.df_shopify_editor["variante"].dropna().unique()
+    st.subheader("⚖️ Comparar Variantes por Pontos/Datas")
     
-    # Seleção de variantes
-    var1 = st.selectbox("Variante Período 1:", variantes_disponiveis, key="var1_cmp")
-    var2 = st.selectbox("Variante Período 2:", variantes_disponiveis, key="var2_cmp")
+    variantes_disponiveis = df_shopify["variante"].dropna().unique()
+    num_comparacoes = st.number_input("Quantas comparações deseja?", min_value=1, max_value=5, value=2)
 
-    # Seleção de datas
-    data_min_total = st.session_state.df_shopify_editor["data"].min().date()
-    data_max_total = st.session_state.df_shopify_editor["data"].max().date()
+    df_todas = pd.DataFrame()
 
-    st.markdown("### Período 1")
-    p1_inicio, p1_fim = st.date_input("Escolha o período 1:", [data_min_total, data_max_total], key="p1_cmp")
-    
-    st.markdown("### Período 2")
-    p2_inicio, p2_fim = st.date_input("Escolha o período 2:", [data_min_total, data_max_total], key="p2_cmp")
+    for i in range(num_comparacoes):
+        st.markdown(f"### Comparação {i+1}")
+        var_sel = st.selectbox(f"Selecione a variante {i+1}:", variantes_disponiveis, key=f"var{i}")
 
-    # Função para gerar gráfico
-    def gerar_grafico(variante, inicio, fim, key):
-        df_filtro = st.session_state.df_shopify_editor[
-            (st.session_state.df_shopify_editor["variante"] == variante) &
-            (st.session_state.df_shopify_editor["data"].dt.date >= inicio) &
-            (st.session_state.df_shopify_editor["data"].dt.date <= fim)
+        # Definir período mínimo e máximo da variante selecionada
+        df_var_total = df_shopify[df_shopify["variante"] == var_sel]
+        data_min, data_max = df_var_total["data"].min().date(), df_var_total["data"].max().date()
+        data_inicio, data_fim = st.date_input(f"Período para {var_sel}:", [data_min, data_max], key=f"date{i}")
+
+        # Filtrar dados pelo período selecionado
+        df_var = df_var_total[
+            (df_var_total["data"].dt.date >= data_inicio) &
+            (df_var_total["data"].dt.date <= data_fim)
         ]
-        if df_filtro.empty:
-            return None, None
 
-        df_group = df_filtro.groupby(df_filtro["data"].dt.date)["itens"].sum().reset_index()
-        df_group.columns = ["Data", "Qtd Pedidos"]
-        df_group["Variante"] = variante
+        # Agrupar por dia e criar coluna de ponto
+        df_var = df_var.groupby(df_var["data"].dt.date)["itens"].sum().reset_index()
+        df_var["variante"] = f"{var_sel} (Comp {i+1})"
+        df_var["Ponto"] = range(1, len(df_var) + 1)  # eixo X: ponto 1, 2, 3...
 
-        fig = px.bar(
-            df_group,
-            x="Data",
-            y="Qtd Pedidos",
-            color="Variante",
-            barmode="stack",
-            text="Qtd Pedidos",
-            color_discrete_sequence=px.colors.qualitative.Set3,
-            title=f"{variante} de {inicio} a {fim}"
+        df_todas = pd.concat([df_todas, df_var], ignore_index=True)
+
+    if not df_todas.empty:
+        fig = px.line(
+            df_todas,
+            x="Ponto",
+            y="itens",
+            color="variante",
+            markers=True,
+            hover_data={"data": True, "itens": True, "Ponto": True}
         )
-        fig.update_layout(xaxis_tickformat="%d/%m/%Y")
-        return fig, df_group
+        fig.update_layout(
+            xaxis_title="Ponto (comparativo)",
+            yaxis_title="Quantidade de Pedidos",
+            legend_title="Variante (Comparativo)"
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
-    # Gerar gráficos
-    fig1, df1 = gerar_grafico(var1, p1_inicio, p1_fim, key="fig_cmp1")
-    fig2, df2 = gerar_grafico(var2, p2_inicio, p2_fim, key="fig_cmp2")
+        # --- Cards com Insights ---
+        st.markdown("### 📊 Insights das Comparações")
+        colunas_cards = st.columns(num_comparacoes)
+        for i in range(num_comparacoes):
+            df_comp = df_todas[df_todas["variante"].str.endswith(f"(Comp {i+1})")]
+            total_itens = df_comp["itens"].sum()
+            media_itens = df_comp["itens"].mean() if len(df_comp) > 0 else 0
+            max_itens = df_comp["itens"].max() if len(df_comp) > 0 else 0
+            colunas_cards[i].metric(f"Variante {i+1}", f"{total_itens} itens", f"Média: {media_itens:.1f}, Máx: {max_itens}")
 
-    if fig1:
-        st.plotly_chart(fig1, use_container_width=True, key="chart1")
     else:
-        st.info(f"Nenhum pedido para {var1} no período 1.")
-
-    if fig2:
-        st.plotly_chart(fig2, use_container_width=True, key="chart2")
-    else:
-        st.info(f"Nenhum pedido para {var2} no período 2.")
-
-    # --- Cards de resumo ---
-    st.subheader("📌 Conclusões")
-    col1, col2, col3, col4 = st.columns(4)
-
-    total1 = df1["Qtd Pedidos"].sum() if df1 is not None else 0
-    total2 = df2["Qtd Pedidos"].sum() if df2 is not None else 0
-
-    media1 = df1["Qtd Pedidos"].mean() if df1 is not None else 0
-    media2 = df2["Qtd Pedidos"].mean() if df2 is not None else 0
-
-    max1 = df1["Qtd Pedidos"].max() if df1 is not None else 0
-    max2 = df2["Qtd Pedidos"].max() if df2 is not None else 0
-
-    col1.metric(f"{var1} - Total pedidos", total1)
-    col2.metric(f"{var2} - Total pedidos", total2)
-    col3.metric(f"{var1} - Média diária", f"{media1:.1f}")
-    col4.metric(f"{var2} - Média diária", f"{media2:.1f}")
-
-    if total1 > total2:
-        st.markdown(f"✅ O período com mais pedidos foi **{var1}**")
-    elif total2 > total1:
-        st.markdown(f"✅ O período com mais pedidos foi **{var2}**")
-    else:
-        st.markdown("✅ Ambos os períodos tiveram a mesma quantidade de pedidos.")
-
-    st.markdown(f"✅ Maior quantidade em um único dia: **{max(max1, max2)}**")
+        st.info("Nenhuma comparação disponível para os períodos selecionados.")

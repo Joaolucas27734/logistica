@@ -262,7 +262,7 @@ elif opcao == "🚚 Logística Geral":
         "⚖️ Comparar Variantes"
     ])
 
- # ======================= TAB 1 ==============================
+# ======================= TAB 1 ==============================
 with tab1:
     st.subheader("🧾 Pedidos Pagos da Shopify")
 
@@ -331,8 +331,6 @@ with tab1:
 
         # --- Atualizar automaticamente na Shopify ---
         try:
-            import requests
-
             SHOP_NAME = st.secrets["shopify"]["shop_name"]
             ACCESS_TOKEN = st.secrets["shopify"]["access_token"]
             url_base = f"https://{SHOP_NAME}/admin/api/2023-10"
@@ -349,7 +347,7 @@ with tab1:
                 st.info("Nenhum código de rastreio novo para enviar à Shopify.")
             else:
                 for _, row in novos_codigos.iterrows():
-                    order_id = str(row["ID"]).replace("#", "").strip()
+                    order_id = str(row["ID"]).strip()  # ID real da Shopify
                     tracking_code = str(row["Codigo de rastreio"]).strip()
 
                     if not order_id or not tracking_code:

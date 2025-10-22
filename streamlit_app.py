@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -6,27 +5,24 @@ import math
 import requests
 import gspread
 from google.oauth2.service_account import Credentials
-import json
 
-# ===========================================================
-# =================== CONFIGURAÇÃO GERAL ====================
-# ===========================================================
+# --- Configuração da página ---
 st.set_page_config(page_title="Dashboard Interativo de Entregas + Estoque", layout="wide")
 st.title("📦 Dashboard Interativo – Entregas & Estoque")
 
 # --- Configurar Google Sheets ---
+import json
+from google.oauth2.service_account import Credentials
+
 SCOPE = ["https://www.googleapis.com/auth/spreadsheets"]
+
+# Carrega o JSON do service account do secrets
 creds_dict = json.loads(st.secrets["gcp_service_account"]["json"])
 CREDS = Credentials.from_service_account_info(creds_dict, scopes=SCOPE)
 GSHEET_CLIENT = gspread.authorize(CREDS)
-
 SHEET_ID = "1dYVZjzCtDBaJ6QdM81WP2k51QodDGZHzKEhzKHSp7v8"
-SHEET_NAME = "Pedidos"  # aba principal
+SHEET_NAME = "Pedidos"  # nome da aba onde será salvo
 
-
-# ===========================================================
-# =================== FUNÇÕES AUXILIARES ====================
-# ===========================================================
 def salvar_status_no_gsheet(df):
     """Salva automaticamente a coluna Status na planilha Google Sheets"""
     try:
@@ -37,15 +33,7 @@ def salvar_status_no_gsheet(df):
     except Exception as e:
         st.error(f"Erro ao salvar no Google Sheets: {e}")
 
-
-def df_para_lista(df):
-    """Converte DataFrame em lista de listas para enviar ao Google Sheets"""
-    return [df.columns.tolist()] + df.astype(str).values.tolist()
-
-
-# ===========================================================
-# ====================== DADOS BASE =========================
-# ===========================================================
+# --- Ler planilha de pedidos ---
 url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&sheet={SHEET_NAME}"
 df = pd.read_csv(url)
 
@@ -65,9 +53,7 @@ df["Status"] = df["data_entrega"].apply(lambda x: "Entregue" if pd.notna(x) else
 df["Código Rastreio"] = df.iloc[:, 5].astype(str)
 df["Link J&T"] = "https://www2.jtexpress.com.br/rastreio/track?codigo=" + df["Código Rastreio"]
 
-# ===========================================================
-# ==================== BARRA LATERAL ========================
-# ===========================================================
+# --- Filtros na barra lateral ---
 st.sidebar.subheader("📅 Filtrar por Data de Envio")
 data_min = df["data_envio"].min()
 data_max = df["data_envio"].max()
@@ -75,7 +61,6 @@ data_inicio, data_fim = st.sidebar.date_input("Selecione o período:", [data_min
 
 st.sidebar.markdown("---")
 opcao = st.sidebar.radio("📋 Selecione o módulo:", ["📦 Estoque", "🚚 Logística Geral"])
-
 
 # ===========================================================
 # ==================== MÓDULO: ESTOQUE =====================
@@ -157,23 +142,36 @@ if opcao == "📦 Estoque":
     st.subheader("📝 Estoque Atual")
     st.dataframe(df_estoque_atual[["Produto", "Quantidade", "Ja Gasto", "Quantidade_Atual", "Pacotes (20 peças)", "Estoque Mínimo"]])
 
-
 # ===========================================================
-# ================ MÓDULO: LOGÍSTICA GERAL ==================
+# ================= MÓDULO: LOGÍSTICA GERAL =================
 # ===========================================================
 elif opcao == "🚚 Logística Geral":
     st.subheader("🚚 Logística Geral – Pedidos Shopify")
 
-    sheet_id = SHEET_ID
-    sh = GSHEET_CLIENT.open_by_key(sheet_id)
-    aba_shopify = "Pedidos Shopify"
+    import requests
+    import pandas as pd
+    import plotly.express as px
+    import gspread
+    from google.oauth2.service_account import Credentials
+    import json
 
+    # --- Configuração da API Google Sheets ---
+    SCOPE = ["https://www.googleapis.com/auth/spreadsheets"]
+    creds_dict = json.loads(st.secrets["gcp_service_account"]["json"])
+    CREDS = Credentials.from_service_account_info(creds_dict, scopes=SCOPE)
+    gc = gspread.authorize(CREDS)
+
+    sheet_id = "1dYVZjzCtDBaJ6QdM81WP2k51QodDGZHzKEhzKHSp7v8"
+    sh = gc.open_by_key(sheet_id)
+
+    # --- Aba que será usada para salvar pedidos ---
+    aba_shopify = "Pedidos Shopify"
     try:
         worksheet = sh.worksheet(aba_shopify)
     except gspread.exceptions.WorksheetNotFound:
         worksheet = sh.add_worksheet(title=aba_shopify, rows="1000", cols="20")
 
-    # --- Função para carregar pedidos pagos da Shopify ---
+    # --- Função para carregar até 1000 pedidos da Shopify com paginação ---
     def carregar_dados_shopify():
         SHOP_NAME = st.secrets["shopify"]["shop_name"]
         ACCESS_TOKEN = st.secrets["shopify"]["access_token"]
@@ -185,7 +183,7 @@ elif opcao == "🚚 Logística Geral":
         url = url_base
         contador = 0
 
-        while url and contador < 4:
+        while url and contador < 4:  # 4 * 250 = 1000 pedidos
             response = requests.get(url, headers=headers)
             if response.status_code != 200:
                 st.error(f"Erro ao acessar a Shopify: {response.status_code}")
@@ -196,6 +194,7 @@ elif opcao == "🚚 Logística Geral":
             pedidos_total.extend(pedidos)
             contador += 1
 
+            # Verifica se há próxima página
             link_header = response.headers.get("Link", "")
             next_url = None
             if 'rel="next"' in link_header:
@@ -211,52 +210,52 @@ elif opcao == "🚚 Logística Geral":
             return pd.DataFrame()
 
         linhas = []
-for pedido in pedidos_total:
-    # Filtra apenas pedidos pagos
-    if pedido.get("financial_status") != "paid":
-        continue
-
-    line_items = pedido.get("line_items", [])
-    if not line_items:
-        continue
-
-    for item in line_items:
-        linha = {
-            "data": pedido.get("created_at"),
-            "cliente": (pedido.get("customer") or {}).get("first_name", "") + " " +
-                       (pedido.get("customer") or {}).get("last_name", ""),
-            "Status": "",  # campo em branco
-            "produto": item.get("title"),
-            "variante": item.get("variant_title"),
-            "itens": item.get("quantity"),
-            "forma_entrega": (pedido.get("shipping_lines")[0]["title"]
-                              if pedido.get("shipping_lines") else "N/A"),
-            "estado": (pedido.get("shipping_address") or {}).get("province", "N/A"),
-            "cidade": (pedido.get("shipping_address") or {}).get("city", "N/A")
-        }
-        linhas.append(linha)
-
+        for pedido in pedidos_total:
+            line_items = pedido.get("line_items", [])
+            if not line_items:
+                continue
+            for item in line_items:
+                linha = {
+                    "data": pedido.get("created_at"),
+                    "cliente": (pedido.get("customer") or {}).get("first_name", "") + " " +
+                               (pedido.get("customer") or {}).get("last_name", ""),
+                    "Status": pedido.get("fulfillment_status") or "Não entregue",
+                    "produto": item.get("title"),
+                    "variante": item.get("variant_title"),
+                    "itens": item.get("quantity"),
+                    "forma_entrega": (pedido.get("shipping_lines")[0]["title"]
+                                      if pedido.get("shipping_lines") else "N/A"),
+                    "estado": (pedido.get("shipping_address") or {}).get("province", "N/A"),
+                    "cidade": (pedido.get("shipping_address") or {}).get("city", "N/A")
+                }
+                linhas.append(linha)
 
         df = pd.DataFrame(linhas)
         df["data"] = pd.to_datetime(df["data"], errors="coerce")
         return df
 
-    # --- Carregar e salvar dados ---
+    # --- Converter DataFrame para lista de listas (para gspread) ---
+    def df_para_lista(df):
+        return [df.columns.tolist()] + df.astype(str).values.tolist()
+
+    # --- Carregar dados da Shopify ---
     df_shopify = carregar_dados_shopify()
     if df_shopify.empty:
         st.stop()
 
+    # --- Salvar/atualizar planilha ---
     worksheet.clear()
     worksheet.update(df_para_lista(df_shopify))
-    st.success(f"✅ Dados da Shopify (apenas pagos) salvos na aba '{aba_shopify}'")
+    st.success(f"✅ Dados da Shopify salvos na aba '{aba_shopify}'")
 
+    # --- Ordenar do mais recente para o mais antigo ---
     df_shopify = df_shopify.sort_values("data", ascending=False)
 
     # ===========================================================
     # ======================= ABAS ==============================
     # ===========================================================
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "📋 Pedidos Pagos",
+        "📋 Pedidos Brutos",
         "📦 Análises por Produto",
         "🏙️ Análises por Localização",
         "📈 Tendência por Variante",
@@ -265,66 +264,108 @@ for pedido in pedidos_total:
 
     # ======================= TAB 1 ==============================
     with tab1:
-        st.subheader("🧾 Pedidos Pagos da Shopify")
-
-        colunas = [
+        st.subheader("🧾 Pedidos Normalizados da Shopify")
+        st.dataframe(df_shopify[[
             "data", "cliente", "Status", "produto", "variante",
-            "itens", "forma_entrega", "estado", "cidade", "pagamento"
-        ]
-
-        st.info("👉 Você pode editar o campo **Status** diretamente na tabela abaixo.")
-        df_editado = st.data_editor(
-            df_shopify[colunas],
-            key="editor_pedidos",
-            hide_index=True,
-            column_config={
-                "Status": st.column_config.SelectboxColumn(
-                    "Status",
-                    options=["Aguardando", "Em transporte", "Entregue", "Cancelado"],
-                    required=True
-                ),
-                "pagamento": st.column_config.TextColumn("Situação Pagamento", disabled=True),
-                "data": st.column_config.DatetimeColumn("Data do Pedido", format="DD/MM/YYYY HH:mm")
-            },
-            disabled=["data", "cliente", "produto", "variante", "itens", "forma_entrega", "estado", "cidade", "pagamento"]
-        )
-
-        if st.button("💾 Salvar alterações no Status"):
-            df_shopify["Status"] = df_editado["Status"]
-            worksheet.clear()
-            worksheet.update(df_para_lista(df_shopify))
-            st.success("✅ Status atualizado com sucesso no Google Sheets!")
+            "itens", "forma_entrega", "estado", "cidade"
+        ]])
 
     # ======================= TAB 2 ==============================
     with tab2:
         st.subheader("📊 Pedidos por Produto")
         pedidos_produto = df_shopify.groupby("produto")["itens"].sum().reset_index()
-        pedidos_produto = pedidos_produto.rename(columns={"itens": "Qtd Pedidos"}).sort_values("Qtd Pedidos", ascending=False)
+        pedidos_produto = pedidos_produto.rename(columns={"itens": "Qtd Pedidos"})
+        pedidos_produto = pedidos_produto.sort_values("Qtd Pedidos", ascending=False)
         st.dataframe(pedidos_produto)
+
+        st.subheader("📊 Pedidos por Variante")
+        pedidos_variante = df_shopify.groupby(["produto", "variante"])["itens"].sum().reset_index()
+        pedidos_variante = pedidos_variante.rename(columns={"itens": "Qtd Pedidos"})
+        pedidos_variante = pedidos_variante.sort_values("Qtd Pedidos", ascending=False)
+        st.dataframe(pedidos_variante)
 
     # ======================= TAB 3 ==============================
     with tab3:
-        st.subheader("🏙️ Pedidos por Localização")
-        pedidos_estado = df_shopify.groupby("estado")["itens"].sum().reset_index().sort_values("itens", ascending=False)
+        st.subheader("🏙️ Pedidos por Cidade")
+        pedidos_cidade = df_shopify.groupby("cidade")["itens"].sum().reset_index()
+        pedidos_cidade = pedidos_cidade.rename(columns={"itens": "Qtd Pedidos"})
+        pedidos_cidade = pedidos_cidade.sort_values("Qtd Pedidos", ascending=False)
+        st.dataframe(pedidos_cidade)
+
+        if not pedidos_cidade.empty:
+            cidade_top = pedidos_cidade.iloc[0]
+            st.markdown(f"**Cidade com mais pedidos:** {cidade_top['cidade']} ({cidade_top['Qtd Pedidos']} itens)")
+
+        st.subheader("📊 Pedidos por Estado")
+        pedidos_estado = df_shopify.groupby("estado")["itens"].sum().reset_index()
+        pedidos_estado = pedidos_estado.rename(columns={"itens": "Qtd Pedidos"})
+        pedidos_estado = pedidos_estado.sort_values("Qtd Pedidos", ascending=False)
         st.dataframe(pedidos_estado)
 
     # ======================= TAB 4 ==============================
     with tab4:
-        st.subheader("📈 Tendência de Pedidos por Variante")
+        st.subheader("📈 Tendência de Crescimento de uma Variante")
         variantes_disponiveis = df_shopify["variante"].dropna().unique()
         variante_sel = st.selectbox("Selecione a variante:", variantes_disponiveis)
-        df_var = df_shopify[df_shopify["variante"] == variante_sel]
-        df_trend = df_var.groupby(df_var["data"].dt.date)["itens"].sum().reset_index()
-        fig = px.line(df_trend, x="data", y="itens", markers=True, title=f"Tendência: {variante_sel}")
-        st.plotly_chart(fig, use_container_width=True)
+        df_variante = df_shopify[df_shopify["variante"] == variante_sel]
+        df_tendencia = df_variante.groupby(df_variante["data"].dt.date)["itens"].sum().reset_index()
+        df_tendencia = df_tendencia.rename(columns={"data": "Data", "itens": "Qtd Pedidos"})
+
+        fig_tendencia = px.line(
+            df_tendencia,
+            x="Data",
+            y="Qtd Pedidos",
+            title=f"Tendência de Pedidos da Variante: {variante_sel}",
+            markers=True
+        )
+        st.plotly_chart(fig_tendencia, use_container_width=True)
 
     # ======================= TAB 5 ==============================
     with tab5:
-        st.subheader("⚖️ Comparar Variantes")
-        variantes = df_shopify["variante"].dropna().unique()
-        var1 = st.selectbox("Variante 1", variantes, key="v1")
-        var2 = st.selectbox("Variante 2", variantes, key="v2")
-        df_comp = df_shopify[df_shopify["variante"].isin([var1, var2])]
-        df_comp = df_comp.groupby(["variante", df_comp["data"].dt.date])["itens"].sum().reset_index()
-        fig = px.line(df_comp, x="data", y="itens", color="variante", markers=True, title="Comparativo de Variantes")
-        st.plotly_chart(fig, use_container_width=True)
+        st.subheader("📈 Comparar Quantidade de Pedidos por Variante")
+        variantes_disponiveis = df_shopify["variante"].dropna().unique()
+        num_comparacoes = st.number_input("Quantas comparações deseja?", min_value=1, max_value=5, value=2)
+
+        df_todas = pd.DataFrame()
+        for i in range(num_comparacoes):
+            st.markdown(f"### Comparação {i+1}")
+            var_sel = st.selectbox(f"Selecione a variante para comparação {i+1}:", variantes_disponiveis, key=f"var{i}")
+
+            data_min = df_shopify["data"].min().date()
+            data_max = df_shopify["data"].max().date()
+            data_inicio, data_fim = st.date_input(
+                f"Selecione período para {var_sel}:",
+                [data_min, data_max],
+                key=f"date{i}"
+            )
+
+            df_var = df_shopify[
+                (df_shopify["variante"] == var_sel) &
+                (df_shopify["data"].dt.date >= data_inicio) &
+                (df_shopify["data"].dt.date <= data_fim)
+            ]
+
+            df_var = df_var.groupby(df_var["data"].dt.date)["itens"].sum().reset_index()
+            df_var["variante"] = f"{var_sel} (Comp {i+1})"
+            df_var = df_var.rename(columns={"data": "Data", "itens": "Qtd Pedidos"})
+            df_var = df_var.sort_values("Data").reset_index(drop=True)
+            df_var["x_ord"] = range(1, len(df_var) + 1)
+
+            df_todas = pd.concat([df_todas, df_var])
+
+        if not df_todas.empty:
+            fig = px.line(
+                df_todas,
+                x="x_ord",
+                y="Qtd Pedidos",
+                color="variante",
+                markers=True,
+                hover_data=["Data"]
+            )
+            fig.update_layout(
+                xaxis_title="Dia do Período (comparação sequencial)",
+                yaxis_title="Quantidade de Pedidos"
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("Nenhuma comparação foi selecionada ou não há dados para o período.")

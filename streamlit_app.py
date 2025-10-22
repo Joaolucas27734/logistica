@@ -228,29 +228,36 @@ if opcao == "🚚 Logística Geral":
         "📈 Tendência de Variante",
         "⚖️ Comparar Variantes"
     ])
-
-    # --- Aba 1: Pedidos Normalizados ---
+# --- Aba 1: Pedidos Normalizados ---
 with aba1:
     st.subheader("📋 Pedidos Normalizados (editável)")
-df_editado = st.data_editor(
-    df_shopify[["Status"]],
-    columns={
-        "Status": st.column_config.SelectboxColumn(
-            "Status", options=["Aguardando", "Entregue", "Não entregue"]
-        )
-    },
-    use_container_width=True
-)
+    
+    df_editado = st.data_editor(
+        df_shopify[["Status"]],
+        columns={
+            "Status": st.column_config.SelectboxColumn(
+                "Status", options=["Aguardando", "Entregue", "Não entregue"]
+            )
+        },
+        use_container_width=True
+    )
 
+    salvar_status_no_gsheet(df_editado)  # agora dentro do bloco da aba1
 
-    # Salvar automaticamente alterações no Google Sheets
-    salvar_status_no_gsheet(df_editado)
+# --- Aba 2: Produtos e Variantes ---
+with aba2:
+    pedidos_produto = (
+        df_shopify.groupby("produto")["itens"]
+        .sum()
+        .reset_index()
+        .sort_values("itens", ascending=False)
+    )
+    pedidos_variante = (
+        df_shopify.groupby(["produto", "variante"])["itens"]
+        .sum()
+        .reset_index()
+        .sort_values("itens", ascending=False)
+    )
 
-    # --- Aba 2: Produtos e Variantes ---
-    with aba2:
-        pedidos_produto = df_shopify.groupby("produto")["itens"].sum().reset_index().sort_values("itens", ascending=False)
-        pedidos_variante = df_shopify.groupby(["produto", "variante"])["itens"].sum().reset_index().sort_values("itens", ascending=False)
-
-        st.subheader("📊 Pedidos por Produto")
-        st.dataframe(pedidos_produto.rename(columns={"itens": "Qtd Pedidos"}))
-
+    st.subheader("📊 Pedidos por Produto")
+    st.dataframe(pedidos_produto.rename(columns={"itens": "Qtd Pedidos"}))

@@ -348,7 +348,7 @@ with tab4:
 
 # ======================= TAB 5 ==============================
 with tab5:
-    st.subheader("⚖️ Comparar Variantes com Período")
+    st.subheader("⚖️ Comparar Variantes por Pontos")
 
     variantes = st.session_state.df_shopify_editor["variante"].dropna().unique()
     
@@ -356,43 +356,41 @@ with tab5:
     var1 = st.selectbox("Variante 1", variantes, key="v1")
     var2 = st.selectbox("Variante 2", variantes, key="v2")
 
-    # Seleção de períodos para cada variante
-    st.markdown("### ⏳ Período da Variante 1")
-    data_inicio_v1, data_fim_v1 = st.date_input("Selecione o período da Variante 1:", 
-                                                [st.session_state.df_shopify_editor["data"].min().date(),
-                                                 st.session_state.df_shopify_editor["data"].max().date()], key="periodo1")
-    
-    st.markdown("### ⏳ Período da Variante 2")
-    data_inicio_v2, data_fim_v2 = st.date_input("Selecione o período da Variante 2:", 
-                                                [st.session_state.df_shopify_editor["data"].min().date(),
-                                                 st.session_state.df_shopify_editor["data"].max().date()], key="periodo2")
+    # Seleção de pontos (número de etapas para cada variante)
+    max_pontos = 5  # você pode alterar conforme necessidade
+    st.markdown("### 🔹 Pontos da Variante 1")
+    ponto_v1 = st.select_slider("Selecione o ponto da Variante 1:", options=[f"Ponto {i}" for i in range(1, max_pontos+1)], key="ponto1")
 
-    # Filtrar dados de acordo com variante e período
-    df_var1 = st.session_state.df_shopify_editor[
-        (st.session_state.df_shopify_editor["variante"] == var1) &
-        (st.session_state.df_shopify_editor["data"].dt.date >= data_inicio_v1) &
-        (st.session_state.df_shopify_editor["data"].dt.date <= data_fim_v1)
-    ]
-    df_var2 = st.session_state.df_shopify_editor[
-        (st.session_state.df_shopify_editor["variante"] == var2) &
-        (st.session_state.df_shopify_editor["data"].dt.date >= data_inicio_v2) &
-        (st.session_state.df_shopify_editor["data"].dt.date <= data_fim_v2)
-    ]
+    st.markdown("### 🔹 Pontos da Variante 2")
+    ponto_v2 = st.select_slider("Selecione o ponto da Variante 2:", options=[f"Ponto {i}" for i in range(1, max_pontos+1)], key="ponto2")
 
-    # Agrupar por data
+    # Criar coluna de pontos fictícios para cada variante
+    df_var1 = st.session_state.df_shopify_editor[st.session_state.df_shopify_editor["variante"] == var1].copy()
+    df_var1 = df_var1.reset_index(drop=True)
+    df_var1["Ponto"] = [f"Ponto {i+1}" for i in range(len(df_var1))]
+
+    df_var2 = st.session_state.df_shopify_editor[st.session_state.df_shopify_editor["variante"] == var2].copy()
+    df_var2 = df_var2.reset_index(drop=True)
+    df_var2["Ponto"] = [f"Ponto {i+1}" for i in range(len(df_var2))]
+
+    # Filtrar apenas o ponto selecionado
+    df_var1_sel = df_var1[df_var1["Ponto"] == ponto_v1]
+    df_var2_sel = df_var2[df_var2["Ponto"] == ponto_v2]
+
+    # Concatenar para gráfico
     df_comp = pd.concat([
-        df_var1.groupby(df_var1["data"].dt.date)["itens"].sum().reset_index().assign(variante=var1),
-        df_var2.groupby(df_var2["data"].dt.date)["itens"].sum().reset_index().assign(variante=var2)
+        df_var1_sel.groupby("Ponto")["itens"].sum().reset_index().assign(variante=var1),
+        df_var2_sel.groupby("Ponto")["itens"].sum().reset_index().assign(variante=var2)
     ])
-    df_comp.columns = ["Data", "Qtd Pedidos", "variante"]
 
-    # Gráfico de linhas
-    fig = px.line(df_comp, x="Data", y="Qtd Pedidos", color="variante", markers=True, title="Comparativo de Variantes")
+    # Gráfico
+    fig = px.bar(df_comp, x="Ponto", y="itens", color="variante", barmode="group",
+                 title="Comparativo de Variantes por Ponto")
     st.plotly_chart(fig, use_container_width=True)
 
-    # ===================== Insights / Cards =====================
-    total_var1 = df_var1["itens"].sum()
-    total_var2 = df_var2["itens"].sum()
+    # Insights
+    total_var1 = df_var1_sel["itens"].sum()
+    total_var2 = df_var2_sel["itens"].sum()
     mais_vendida = var1 if total_var1 > total_var2 else var2
     diferenca_pct = abs(total_var1 - total_var2) / max(total_var1, total_var2) * 100 if max(total_var1, total_var2) > 0 else 0
 
@@ -402,4 +400,5 @@ with tab5:
     c2.metric(f"Total {var2}", total_var2)
     c3.metric("Diferença (%)", f"{diferenca_pct:.1f}%", delta=f"{'+' if total_var1>total_var2 else '-'}{diferenca_pct:.1f}%")
     
-    st.markdown(f"✅ Variante mais vendida no período: **{mais_vendida}**")
+    st.markdown(f"✅ Variante mais vendida no ponto selecionado: **{mais_vendida}**")
+

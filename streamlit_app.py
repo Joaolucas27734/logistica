@@ -266,14 +266,19 @@ elif opcao == "🚚 Logística Geral":
 with tab1:
     st.subheader("🧾 Pedidos Pagos da Shopify")
 
-    # --- Colunas principais ---
+    # --- Colunas desejadas ---
     colunas = [
         "data", "cliente", "Status", "produto", "variante",
         "itens", "ID", "Codigo de rastreio", "Situacao",
         "forma_entrega", "estado", "cidade", "pagamento"
     ]
 
-    # Inicializa o DataFrame do editor na sessão, se ainda não existir
+    # --- Garante que as colunas extras existam ---
+    for col in ["ID", "Codigo de rastreio", "Situacao"]:
+        if col not in df_shopify.columns:
+            df_shopify[col] = ""
+
+    # --- Inicializa o editor na sessão ---
     if "df_shopify_editor" not in st.session_state:
         st.session_state.df_shopify_editor = df_shopify[colunas].copy()
 
@@ -303,10 +308,13 @@ with tab1:
             "data": st.column_config.DatetimeColumn("Data do Pedido", format="DD/MM/YYYY HH:mm"),
             "ID": st.column_config.TextColumn("ID do Pedido", disabled=True),
         },
-        disabled=["data", "cliente", "produto", "variante", "itens", "forma_entrega", "estado", "cidade", "pagamento", "ID"]
+        disabled=[
+            "data", "cliente", "produto", "variante", "itens",
+            "forma_entrega", "estado", "cidade", "pagamento", "ID"
+        ]
     )
 
-    # --- Botão para salvar alterações ---
+    # --- Botão para salvar ---
     if st.button("💾 Salvar alterações"):
         st.session_state.df_shopify_editor["Status"] = df_editado["Status"]
         st.session_state.df_shopify_editor["Codigo de rastreio"] = df_editado["Codigo de rastreio"]
@@ -318,7 +326,6 @@ with tab1:
             st.success("✅ Alterações salvas com sucesso no Google Sheets!")
         except Exception as e:
             st.error(f"❌ Erro ao salvar no Google Sheets: {e}")
-
 
 # ======================= TAB 2 ==============================
 with tab2:

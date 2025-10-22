@@ -302,46 +302,63 @@ with tab1:
         except Exception as e:
             st.error(f"❌ Erro ao salvar no Google Sheets: {e}")
 
-# ======================= TAB 2 ==============================
+# ======================= TAB: Análises por Produto e Variante ==============================
 with tab2:
     st.subheader("📊 Análises por Produto e Variante")
 
-    # --- Filtrar por data ---
-    data_min, data_max = df_shopify["data"].min().date(), df_shopify["data"].max().date()
-    data_inicio, data_fim = st.date_input("Selecione o período:", [data_min, data_max], key="analise_data")
+    # --- Filtro de datas ---
+    data_min = df_shopify["data"].min().date()
+    data_max = df_shopify["data"].max().date()
+    data_inicio, data_fim = st.date_input("Selecione o período:", [data_min, data_max])
 
-    df_filtrado = df_shopify[
-        (df_shopify["data"].dt.date >= data_inicio) &
-        (df_shopify["data"].dt.date <= data_fim)
-    ]
-
-    # --- Seleção de produto ---
-    produtos_disponiveis = df_filtrado["produto"].dropna().unique()
+    # --- Filtro de produto ---
+    produtos_disponiveis = st.session_state.df_shopify_editor["produto"].dropna().unique()
     produto_sel = st.selectbox("Selecione o produto:", produtos_disponiveis)
 
-    df_produto = df_filtrado[df_filtrado["produto"] == produto_sel]
+    # --- Filtrar DataFrame ---
+    df_produto = st.session_state.df_shopify_editor[
+        (st.session_state.df_shopify_editor["produto"] == produto_sel) &
+        (st.session_state.df_shopify_editor["data"].dt.date >= data_inicio) &
+        (st.session_state.df_shopify_editor["data"].dt.date <= data_fim)
+    ]
 
-    # --- Agrupar por data e variante ---
-    df_group = df_produto.groupby([df_produto["data"].dt.date, "variante"])["itens"].sum().reset_index()
-    df_group = df_group.rename(columns={"data": "Data", "itens": "Qtd Pedidos"})
+    if df_produto.empty:
+        st.info("Nenhum pedido disponível para o período e produto selecionados.")
+    else:
+        # --- Agrupar por data e variante ---
+        df_group = df_produto.groupby([df_produto["data"].dt.date, "variante"])["itens"].sum().reset_index()
+        df_group = df_group.rename(columns={"data": "Data", "itens": "Qtd Pedidos"})
 
-    # --- Gráfico de barras empilhadas por variante ---
-    if not df_group.empty:
+        # --- Gráfico de barras empilhadas ---
         fig_bar = px.bar(
             df_group,
-            x="data",
-            y="itens",
+            x="Data",
+            y="Qtd Pedidos",
             color="variante",
-            barmode="stack",  # ou "group" se preferir barras lado a lado
-            text="itens",
+            barmode="stack",
+            text="Qtd Pedidos",
             color_discrete_sequence=px.colors.qualitative.Set3,
-            labels={"data": "Data", "itens": "Qtd Pedidos", "variante": "Variante"},
+            labels={"Data": "Data", "Qtd Pedidos": "Qtd Pedidos", "variante": "Variante"},
             title=f"Pedidos por dia e variante – {produto_sel}"
         )
-        fig_bar.update_traces(textposition='outside')
+        fig_bar.update_layout(xaxis_tickformat="%d/%m/%Y")
+
         st.plotly_chart(fig_bar, use_container_width=True)
-    else:
-        st.info("Nenhum dado disponível para o período e produto selecionados.")
+
+        # --- Gráfico pizza de comparação de variantes ---
+        st.subheader("📊 Comparação de variantes")
+        df_pizza = df_produto.groupby("variante")["itens"].sum().reset_index()
+        df_pizza = df_pizza.rename(columns={"itens": "Qtd Pedidos"})
+        fig_pie = px.pie(
+            df_pizza,
+            names="variante",
+            values="Qtd Pedidos",
+            color="variante",
+            color_discrete_sequence=px.colors.qualitative.Set3,
+            title=f"Distribuição de variantes – {produto_sel}"
+        )
+        st.plotly_chart(fig_pie, use_container_width=True)
+
 
 # ======================= TAB 3 ==============================
 with tab3:

@@ -215,24 +215,20 @@ if opcao == "🚚 Logística Geral":
 with aba1:
     st.subheader("📋 Pedidos Normalizados (editável)")
 
-    # Editor interativo
     df_editado = st.data_editor(
         df_shopify[[
             "data", "cliente", "Status", "produto", "variante", "itens", "forma_entrega", "estado", "cidade"
         ]],
-        num_rows="dynamic",  # permite adicionar linhas se quiser
+        columns={
+            "Status": st.column_config.SelectboxColumn("Status", options=["Aguardando"])
+        },
+        disabled=[col for col in df_shopify.columns if col != "Status"],
+        num_rows="dynamic",
         use_container_width=True
     )
 
-    # Mostrar resumo de alterações
-    if not df_editado.equals(df_shopify):
-        st.success("✅ Alterações detectadas! (ainda não salvas permanentemente)")
-
-        # Botão para salvar
-        if st.button("💾 Salvar alterações"):
-            df_editado.to_csv("pedidos_editados.csv", index=False)
-            st.info("Alterações salvas no arquivo 'pedidos_editados.csv'.")
-
+    # Atualiza planilha automaticamente
+    salvar_status(df_editado)
 
     # --- Aba 2: Produtos e Variantes ---
     with aba2:

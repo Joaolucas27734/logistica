@@ -262,13 +262,44 @@ elif opcao == "🚚 Logística Geral":
         "⚖️ Comparar Variantes"
     ])
 
-    # ======================= TAB 1 ==============================
-    with tab1:
-        st.subheader("🧾 Pedidos Normalizados da Shopify")
-        st.dataframe(df_shopify[[
-            "data", "cliente", "Status", "produto", "variante",
-            "itens", "forma_entrega", "estado", "cidade"
-        ]])
+   # ======================= TAB 1 ==============================
+with tab1:
+    st.subheader("🧾 Pedidos Normalizados da Shopify")
+
+    # Seleciona apenas colunas que serão mostradas
+    colunas = [
+        "data", "cliente", "Status", "produto",
+        "variante", "itens", "forma_entrega",
+        "estado", "cidade"
+    ]
+
+    # Exibe editor interativo
+    st.info("👉 Você pode editar o campo **Status** diretamente na tabela abaixo.")
+    df_editado = st.data_editor(
+        df_shopify[colunas],
+        key="editor_pedidos",
+        hide_index=True,
+        column_config={
+            "Status": st.column_config.SelectboxColumn(
+                "Status",
+                options=["Não entregue", "Em transporte", "Entregue", "Cancelado", "Retornado"],
+                required=True
+            ),
+            "data": st.column_config.DatetimeColumn("Data do Pedido", format="DD/MM/YYYY HH:mm")
+        },
+        disabled=["data", "cliente", "produto", "variante", "itens", "forma_entrega", "estado", "cidade"]
+    )
+
+    # Botão para salvar alterações no Google Sheets
+    if st.button("💾 Salvar alterações no Status"):
+        # Atualiza o dataframe principal
+        df_shopify["Status"] = df_editado["Status"]
+
+        # Regrava a planilha completa no Google Sheets
+        worksheet.clear()
+        worksheet.update(df_para_lista(df_shopify))
+        st.success("✅ Status atualizado com sucesso no Google Sheets!")
+
 
     # ======================= TAB 2 ==============================
     with tab2:

@@ -303,24 +303,43 @@ with tab1:
             st.error(f"❌ Erro ao salvar no Google Sheets: {e}")
 
 # ======================= TAB 2 ==============================
-# ======================= TAB 2 ==============================
 with tab2:
     st.subheader("📊 Análises por Produto e Variante")
 
-    # 1️⃣ Total por Produto
-    st.markdown("### 🟢 Total de Itens por Produto")
-    pedidos_produto = st.session_state.df_shopify_editor.groupby("produto")["itens"].sum().reset_index()
-    pedidos_produto = pedidos_produto.rename(columns={"itens": "Qtd Pedidos"}).sort_values("Qtd Pedidos", ascending=False)
-    st.dataframe(pedidos_produto)
+    # --- Filtrar por data ---
+    data_min, data_max = df_shopify["data"].min().date(), df_shopify["data"].max().date()
+    data_inicio, data_fim = st.date_input("Selecione o período:", [data_min, data_max], key="analise_data")
 
-    # 2️⃣ Variantes do Produto Selecionado
-    st.markdown("### 🔵 Detalhe por Variante do Produto")
-    produto_sel = st.selectbox("Selecione o produto para ver variantes:", pedidos_produto["produto"].unique())
-    pedidos_variante = st.session_state.df_shopify_editor[st.session_state.df_shopify_editor["produto"] == produto_sel]
-    pedidos_variante = pedidos_variante.groupby("variante")["itens"].sum().reset_index()
-    pedidos_variante = pedidos_variante.rename(columns={"itens": "Qtd Pedidos"}).sort_values("Qtd Pedidos", ascending=False)
-    st.dataframe(pedidos_variante)
+    df_filtrado = df_shopify[
+        (df_shopify["data"].dt.date >= data_inicio) &
+        (df_shopify["data"].dt.date <= data_fim)
+    ]
 
+    # --- Seleção de produto ---
+    produtos_disponiveis = df_filtrado["produto"].dropna().unique()
+    produto_sel = st.selectbox("Selecione o produto:", produtos_disponiveis)
+
+    df_produto = df_filtrado[df_filtrado["produto"] == produto_sel]
+
+    # --- Quantidade por variante ---
+    qtd_variantes = df_produto.groupby("variante")["itens"].sum().reset_index().sort_values("itens", ascending=False)
+    qtd_variantes = qtd_variantes.rename(columns={"itens": "Qtd Pedidos"})
+    
+    st.markdown(f"### Quantidade de pedidos por variante – {produto_sel}")
+    st.dataframe(qtd_variantes)
+
+    # --- Gráfico de pizza ---
+    if not qtd_variantes.empty:
+        fig_pizza = px.pie(
+            qtd_variantes,
+            names="variante",
+            values="Qtd Pedidos",
+            title=f"Distribuição de variantes do produto '{produto_sel}'",
+            hole=0.3
+        )
+        st.plotly_chart(fig_pizza, use_container_width=True)
+    else:
+        st.info("Nenhum dado disponível para o período e produto selecionados.")
 
 
 # ======================= TAB 3 ==============================

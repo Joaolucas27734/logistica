@@ -182,19 +182,35 @@ elif opcao == "🚚 Logística Geral":
         headers = {"X-Shopify-Access-Token": ACCESS_TOKEN}
 
         pedidos_total = []
-        url = url_base
-        contador = 0
+      import time
 
-        while url and contador < 4:
-            response = requests.get(url, headers=headers)
-            if response.status_code != 200:
-                st.error(f"Erro ao acessar a Shopify: {response.status_code}")
+url = url_base
+pedidos_total = []
+
+while url:
+    response = requests.get(url, headers=headers)
+    if response.status_code != 200:
+        st.error(f"Erro ao acessar a Shopify: {response.status_code}")
+        break
+
+    data = response.json()
+    pedidos = data.get("orders", [])
+    pedidos_total.extend(pedidos)
+
+    # Controle de rate limit
+    time.sleep(0.5)
+
+    # Pegar próxima página
+    link_header = response.headers.get("Link", "")
+    next_url = None
+    if 'rel="next"' in link_header:
+        partes = link_header.split(",")
+        for parte in partes:
+            if 'rel="next"' in parte:
+                next_url = parte.split(";")[0].strip("<> ")
                 break
+    url = next_url
 
-            data = response.json()
-            pedidos = data.get("orders", [])
-            pedidos_total.extend(pedidos)
-            contador += 1
 
             link_header = response.headers.get("Link", "")
             next_url = None

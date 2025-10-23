@@ -313,69 +313,65 @@ with tab1:
             "forma_entrega", "estado", "cidade", "pagamento", "ID"
         ]
     )
+# --- Botão para salvar ---
+if st.button("💾 Salvar alterações"):
+    # Atualiza session_state com os valores editados
+    st.session_state.df_shopify_editor["Status"] = df_editado["Status"]
+    st.session_state.df_shopify_editor["Codigo de rastreio"] = df_editado["Codigo de rastreio"]
+    st.session_state.df_shopify_editor["Situacao"] = df_editado["Situacao"]
 
-    # --- Botão para salvar ---
-    if st.button("💾 Salvar alterações"):
-        # Atualiza session_state com os valores editados
-        st.session_state.df_shopify_editor["Status"] = df_editado["Status"]
-        st.session_state.df_shopify_editor["Codigo de rastreio"] = df_editado["Codigo de rastreio"]
-        st.session_state.df_shopify_editor["Situacao"] = df_editado["Situacao"]
+    # Salva no Google Sheets
+    try:
+        worksheet.clear()
+        worksheet.update(df_para_lista(st.session_state.df_shopify_editor))
+        st.success("✅ Alterações salvas com sucesso no Google Sheets!")
+    except Exception as e:
+        st.error(f"❌ Erro ao salvar no Google Sheets: {e}")
 
-        # Salva no Google Sheets
-        try:
-            worksheet.clear()
-            worksheet.update(df_para_lista(st.session_state.df_shopify_editor))
-            st.success("✅ Alterações salvas com sucesso no Google Sheets!")
-        except Exception as e:
-            st.error(f"❌ Erro ao salvar no Google Sheets: {e}")
+    # --- Função para enviar códigos de rastreio para Shopify ---
+    def enviar_codigos_shopify(df):
+        SHOP_NAME = st.secrets["shopify"]["shop_name"]
+        ACCESS_TOKEN = st.secrets["shopify"]["access_token"]
+        url_base = f"https://{SHOP_NAME}/admin/api/2023-10"
+        headers = {
+            "Content-Type": "application/json",
+            "X-Shopify-Access-Token": ACCESS_TOKEN
+        }
 
-        # --- Atualizar automaticamente na Shopify ---
-        try:
-            SHOP_NAME = st.secrets["shopify"]["shop_name"]
-            ACCESS_TOKEN = st.secrets["shopify"]["access_token"]
-            url_base = f"https://{SHOP_NAME}/admin/api/2023-10"
+        novos_codigos = df[df["Codigo de rastreio"].notna() & (df["Codigo de rastreio"] != "")]
+        if novos_codigos.empty:
+            st.info("Nenhum código de rastreio novo para enviar à Shopify.")
+        else:
+            for _, row in novos_codigos.iterrows():
+                order_id = str(row["ID"]).strip()
+                tracking_code = str(row["Codigo de rastreio"]).strip()
+                if not order_id or not tracking_code:
+                    continue
 
-            headers = {
-                "Content-Type": "application/json",
-                "X-Shopify-Access-Token": ACCESS_TOKEN
-            }
-
-            df_atual = st.session_state.df_shopify_editor
-            novos_codigos = df_atual[df_atual["Codigo de rastreio"].notna() & (df_atual["Codigo de rastreio"] != "")]
-
-            if novos_codigos.empty:
-                st.info("Nenhum código de rastreio novo para enviar à Shopify.")
-            else:
-                for _, row in novos_codigos.iterrows():
-                    order_id = str(row["ID"]).strip()  # ID real da Shopify
-                    tracking_code = str(row["Codigo de rastreio"]).strip()
-
-                    if not order_id or not tracking_code:
-                        continue
-
-                    fulfillment_data = {
-                        "fulfillment": {
-                            "tracking_number": tracking_code,
-                            "notify_customer": True
-                        }
+                fulfillment_data = {
+                    "fulfillment": {
+                        "tracking_number": tracking_code,
+                        "notify_customer": True
                     }
+                }
 
-                    try:
-                        response = requests.post(
-                            f"{url_base}/orders/{order_id}/fulfillments.json",
-                            headers=headers,
-                            json=fulfillment_data
-                        )
+                try:
+                    response = requests.post(
+                        f"{url_base}/orders/{order_id}/fulfillments.json",
+                        headers=headers,
+                        json=fulfillment_data
+                    )
 
-                        if response.status_code in [200, 201]:
-                            st.success(f"📦 Código {tracking_code} enviado com sucesso para o pedido #{order_id}.")
-                        else:
-                            st.warning(f"⚠️ Erro ao atualizar pedido #{order_id}: {response.text}")
-                    except Exception as e:
-                        st.error(f"❌ Falha ao enviar código para pedido #{order_id}: {e}")
+                    if response.status_code in [200, 201]:
+                        st.success(f"📦 Código {tracking_code} enviado com sucesso para o pedido #{order_id}.")
+                    else:
+                        st.warning(f"⚠️ Erro ao atualizar pedido #{order_id}: {response.text}")
+                except Exception as e:
+                    st.error(f"❌ Falha ao enviar código para pedido #{order_id}: {e}")
 
-        except Exception as e:
-            st.error(f"❌ Erro geral ao conectar com a Shopify: {e}")
+    # --- Chama a função para envio automático ---
+    enviar_codigos_shopify(st.session_state.df_shopify_editor)
+
 
 
 

@@ -349,6 +349,7 @@ if st.button("💾 Salvar alterações"):
                 fulfillment_data = {
                     "fulfillment": {
                         "tracking_number": tracking_code,
+                        "tracking_company": "Correios",
                         "notify_customer": True
                     }
                 }

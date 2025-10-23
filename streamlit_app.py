@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -9,9 +8,37 @@ from google.oauth2.service_account import Credentials
 import json
 
 # ===========================================================
-# =================== CONFIGURAÇÃO GERAL ====================
+# =================== LOGIN SIMPLES ========================
 # ===========================================================
 st.set_page_config(page_title="Dashboard Interativo de Entregas + Estoque", layout="wide")
+st.title("🔒 Login")
+
+# --- Usuários e senhas (exemplo) ---
+usuarios = {
+    "joao": "senha123",
+    "maria": "123456"
+}
+
+username = st.text_input("Usuário")
+password = st.text_input("Senha", type="password")
+login = st.button("Entrar")
+
+if login:
+    if username in usuarios and usuarios[username] == password:
+        st.success(f"Bem-vindo, {username}!")
+        # Flag para liberar o dashboard
+        st.session_state.logged_in = True
+    else:
+        st.error("Usuário ou senha incorretos")
+        st.session_state.logged_in = False
+
+# Se não estiver logado, parar aqui
+if "logged_in" not in st.session_state or not st.session_state.logged_in:
+    st.stop()
+
+# ===========================================================
+# =================== CONFIGURAÇÃO GERAL ====================
+# ===========================================================
 st.title("📦 Dashboard Interativo – Entregas & Estoque")
 
 # --- Configurar Google Sheets ---

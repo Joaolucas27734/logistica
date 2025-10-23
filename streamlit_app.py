@@ -266,7 +266,7 @@ def carregar_dados_shopify():
 
 # ======================= TAB 1 ==============================
 with tab1:
-    st.subheader("🧾 Pedidos Pagos da Shopify")
+    st.subheader("📋 Pedidos Pagos")
 
     # --- Colunas desejadas ---
     colunas = [

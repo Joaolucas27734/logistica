@@ -364,7 +364,7 @@ if st.button("💾 Salvar alterações"):
                     if response.status_code in [200, 201]:
                         st.success(f"📦 Código {tracking_code} enviado com sucesso para o pedido #{order_id}.")
                     else:
-                        st.warning(f"⚠️ Erro ao atualizar pedido #{order_id}: {response.text}")
+                        st.warning(f"⚠️ Erro ao atualizar pedido #{order_id}: {response.status_code} - {response.text}")
                 except Exception as e:
                     st.error(f"❌ Falha ao enviar código para pedido #{order_id}: {e}")
 

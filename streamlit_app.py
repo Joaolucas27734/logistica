@@ -229,7 +229,6 @@ elif opcao == "🚚 Logística Geral":
                     "cidade": (pedido.get("shipping_address") or {}).get("city", "N/A"),
                     "pagamento": pedido.get("financial_status", "desconhecido"),
                     "ID": pedido.get("id")  # <-- ESSENCIAL para envio automático à Shopify
-                    "fulfillment_status": pedido.get("fulfillment_status") or "unfulfilled",  # <- Nova coluna
                 }
                 linhas.append(linha)
 
@@ -262,7 +261,7 @@ elif opcao == "🚚 Logística Geral":
     colunas = [
         "data", "cliente", "Status", "produto", "variante",
         "itens", "ID", "Codigo de rastreio", "Situacao",
-        "forma_entrega", "estado", "cidade", "pagamento, fulfillment_status"
+        "forma_entrega", "estado", "cidade", "pagamento"
     ]
     for col in ["ID", "Codigo de rastreio", "Situacao"]:
         if col not in df_shopify.columns:

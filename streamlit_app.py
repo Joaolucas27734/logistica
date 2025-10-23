@@ -210,30 +210,28 @@ elif opcao == "🚚 Logística Geral":
             return pd.DataFrame()
 
         linhas = []
-for pedido in pedidos_total:
-    # Pula pedidos não pagos
-    if pedido.get("financial_status") not in ["paid", "partially_paid"]:
-        continue
+        for pedido in pedidos_total:
+            if pedido.get("financial_status") not in ["paid", "partially_paid"]:
+                continue
 
-    for item in pedido.get("line_items", []):
-        linha = {
-            "data": pedido.get("created_at"),
-            "cliente": (pedido.get("customer") or {}).get("first_name", "") + " " +
-                       (pedido.get("customer") or {}).get("last_name", ""),
-            "Status": pedido.get("fulfillment_status") or "unfulfilled",  # <- Aqui marca fulfillment
-            "fulfillment_status": pedido.get("fulfillment_status") or "unfulfilled",  # <- Nova coluna
-            "produto": item.get("title"),
-            "variante": item.get("variant_title"),
-            "itens": item.get("quantity"),
-            "forma_entrega": (pedido.get("shipping_lines")[0]["title"]
-                              if pedido.get("shipping_lines") else "N/A"),
-            "estado": (pedido.get("shipping_address") or {}).get("province", "N/A"),
-            "cidade": (pedido.get("shipping_address") or {}).get("city", "N/A"),
-            "pagamento": pedido.get("financial_status", "desconhecido"),
-            "ID": pedido.get("id")
-        }
-        linhas.append(linha)
-
+            for item in pedido.get("line_items", []):
+                linha = {
+                    "data": pedido.get("created_at"),
+                    "cliente": (pedido.get("customer") or {}).get("first_name", "") + " " +
+                               (pedido.get("customer") or {}).get("last_name", ""),
+                    "Status": pedido.get("fulfillment_status") or "Aguardando",
+                    "produto": item.get("title"),
+                    "variante": item.get("variant_title"),
+                    "itens": item.get("quantity"),
+                    "forma_entrega": (pedido.get("shipping_lines")[0]["title"]
+                                      if pedido.get("shipping_lines") else "N/A"),
+                    "estado": (pedido.get("shipping_address") or {}).get("province", "N/A"),
+                    "cidade": (pedido.get("shipping_address") or {}).get("city", "N/A"),
+                    "pagamento": pedido.get("financial_status", "desconhecido"),
+                    "ID": pedido.get("id")  # <-- ESSENCIAL para envio automático à Shopify
+                    "fulfillment_status": pedido.get("fulfillment_status") or "unfulfilled",  # <- Nova coluna
+                }
+                linhas.append(linha)
 
         df = pd.DataFrame(linhas)
         df["data"] = pd.to_datetime(df["data"], errors="coerce")

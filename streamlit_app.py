@@ -17,7 +17,8 @@ st.title("🔒 Login")
 # --- Usuários e senhas (exemplo) ---
 usuarios = {
     "joao": "senha123",
-    "maria": "123456"
+    "maria": "123456",
+    "Patrick: "login23"
 }
 
 # --- Inputs de login ---

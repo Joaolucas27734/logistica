@@ -183,78 +183,84 @@ elif opcao == "🚚 Logística Geral":
 
         pedidos_total = []
       import time
+import time  # fora de qualquer bloco
 
-url = url_base
-pedidos_total = []
+import time
+import requests
+import pandas as pd
+import streamlit as st
 
-while url:
-    response = requests.get(url, headers=headers)
-    if response.status_code != 200:
-        st.error(f"Erro ao acessar a Shopify: {response.status_code}")
-        break
+def carregar_dados_shopify():
+    SHOP_NAME = st.secrets["shopify"]["shop_name"]
+    ACCESS_TOKEN = st.secrets["shopify"]["access_token"]
 
-    data = response.json()
-    pedidos = data.get("orders", [])
-    pedidos_total.extend(pedidos)
+    url_base = f"https://{SHOP_NAME}/admin/api/2023-10/orders.json?status=any&limit=250"
+    headers = {"X-Shopify-Access-Token": ACCESS_TOKEN}
 
-    # Controle de rate limit
-    time.sleep(0.5)
+    pedidos_total = []
+    url = url_base
 
-    # Pegar próxima página
-    link_header = response.headers.get("Link", "")
-    next_url = None
-    if 'rel="next"' in link_header:
-        partes = link_header.split(",")
-        for parte in partes:
-            if 'rel="next"' in parte:
-                next_url = parte.split(";")[0].strip("<> ")
-                break
-    url = next_url
+    while url:
+        response = requests.get(url, headers=headers)
+        if response.status_code != 200:
+            st.error(f"Erro ao acessar a Shopify: {response.status_code}")
+            break
 
+        data = response.json()
+        pedidos = data.get("orders", [])
+        pedidos_total.extend(pedidos)
 
-            link_header = response.headers.get("Link", "")
-            next_url = None
-            if 'rel="next"' in link_header:
-                partes = link_header.split(",")
-                for parte in partes:
-                    if 'rel="next"' in parte:
-                        next_url = parte.split(";")[0].strip("<> ")
-                        break
-            url = next_url
+        # Controle de rate limit
+        time.sleep(0.5)
 
-        if not pedidos_total:
-            st.warning("Nenhum pedido encontrado.")
-            return pd.DataFrame()
+        # Pegar próxima página
+        link_header = response.headers.get("Link", "")
+        next_url = None
+        if 'rel="next"' in link_header:
+            partes = link_header.split(",")
+            for parte in partes:
+                if 'rel="next"' in parte:
+                    next_url = parte.split(";")[0].strip("<> ")
+                    break
+        url = next_url
 
-        linhas = []
-        for pedido in pedidos_total:
-            # 🔹 FILTRA APENAS PAGOS
-            if pedido.get("financial_status") not in ["paid", "partially_paid"]:
-                continue
+    if not pedidos_total:
+        st.warning("Nenhum pedido encontrado.")
+        return pd.DataFrame()
 
-            line_items = pedido.get("line_items", [])
-            if not line_items:
-                continue
-            for item in line_items:
-                linha = {
-                    "data": pedido.get("created_at"),
-                    "cliente": (pedido.get("customer") or {}).get("first_name", "") + " " +
-                               (pedido.get("customer") or {}).get("last_name", ""),
-                    "Status": pedido.get("fulfillment_status") or "Aguardando",
-                    "produto": item.get("title"),
-                    "variante": item.get("variant_title"),
-                    "itens": item.get("quantity"),
-                    "forma_entrega": (pedido.get("shipping_lines")[0]["title"]
-                                      if pedido.get("shipping_lines") else "N/A"),
-                    "estado": (pedido.get("shipping_address") or {}).get("province", "N/A"),
-                    "cidade": (pedido.get("shipping_address") or {}).get("city", "N/A"),
-                    "pagamento": pedido.get("financial_status", "desconhecido")
-                }
-                linhas.append(linha)
+    linhas = []
+    for pedido in pedidos_total:
+        # 🔹 FILTRA APENAS PAGOS
+        if pedido.get("financial_status") not in ["paid", "partially_paid"]:
+            continue
 
-        df = pd.DataFrame(linhas)
-        df["data"] = pd.to_datetime(df["data"], errors="coerce")
-        return df
+        line_items = pedido.get("line_items", [])
+        if not line_items:
+            continue
+
+        for item in line_items:
+            linha = {
+                "ID": pedido.get("id"),  # importante para fulfillment
+                "data": pedido.get("created_at"),
+                "cliente": (pedido.get("customer") or {}).get("first_name", "") + " " +
+                           (pedido.get("customer") or {}).get("last_name", ""),
+                "Status": pedido.get("fulfillment_status") or "Aguardando",
+                "produto": item.get("title"),
+                "variante": item.get("variant_title"),
+                "itens": item.get("quantity"),
+                "forma_entrega": (pedido.get("shipping_lines")[0]["title"]
+                                  if pedido.get("shipping_lines") else "N/A"),
+                "estado": (pedido.get("shipping_address") or {}).get("province", "N/A"),
+                "cidade": (pedido.get("shipping_address") or {}).get("city", "N/A"),
+                "pagamento": pedido.get("financial_status", "desconhecido"),
+                "Codigo de rastreio": "",
+                "Situacao": ""
+            }
+            linhas.append(linha)
+
+    df = pd.DataFrame(linhas)
+    df["data"] = pd.to_datetime(df["data"], errors="coerce")
+    return df
 
     # --- Carregar e salvar dados ---
     df_shopify = carregar_dados_shopify()

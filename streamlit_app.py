@@ -173,73 +173,74 @@ elif opcao == "🚚 Logística Geral":
     except gspread.exceptions.WorksheetNotFound:
         worksheet = sh.add_worksheet(title=aba_shopify, rows="1000", cols="20")
 
-    # --- Função para carregar pedidos pagos da Shopify ---
-    def carregar_dados_shopify():
-        SHOP_NAME = st.secrets["shopify"]["shop_name"]
-        ACCESS_TOKEN = st.secrets["shopify"]["access_token"]
+# --- Função para carregar pedidos pagos da Shopify ---
+def carregar_dados_shopify():
+    SHOP_NAME = st.secrets["shopify"]["shop_name"]
+    ACCESS_TOKEN = st.secrets["shopify"]["access_token"]
 
-        url_base = f"https://{SHOP_NAME}/admin/api/2023-10/orders.json?status=any&limit=250"
-        headers = {"X-Shopify-Access-Token": ACCESS_TOKEN}
+    url_base = f"https://{SHOP_NAME}/admin/api/2023-10/orders.json?status=any&limit=250"
+    headers = {"X-Shopify-Access-Token": ACCESS_TOKEN}
 
-        pedidos_total = []
-        url = url_base
-        contador = 0
+    pedidos_total = []
+    url = url_base
+    contador = 0
 
-        while url and contador < 4:
-            response = requests.get(url, headers=headers)
-            if response.status_code != 200:
-                st.error(f"Erro ao acessar a Shopify: {response.status_code}")
-                break
+    while url and contador < 4:
+        response = requests.get(url, headers=headers)
+        if response.status_code != 200:
+            st.error(f"Erro ao acessar a Shopify: {response.status_code}")
+            break
 
-            data = response.json()
-            pedidos = data.get("orders", [])
-            pedidos_total.extend(pedidos)
-            contador += 1
+        data = response.json()
+        pedidos = data.get("orders", [])
+        pedidos_total.extend(pedidos)
+        contador += 1
 
-            link_header = response.headers.get("Link", "")
-            next_url = None
-            if 'rel="next"' in link_header:
-                partes = link_header.split(",")
-                for parte in partes:
-                    if 'rel="next"' in parte:
-                        next_url = parte.split(";")[0].strip("<> ")
-                        break
-            url = next_url
+        # Verifica se há próxima página
+        link_header = response.headers.get("Link", "")
+        next_url = None
+        if 'rel="next"' in link_header:
+            partes = link_header.split(",")
+            for parte in partes:
+                if 'rel="next"' in parte:
+                    next_url = parte.split(";")[0].strip("<> ")
+                    break
+        url = next_url
 
-        if not pedidos_total:
-            st.warning("Nenhum pedido encontrado.")
-            return pd.DataFrame()
+    if not pedidos_total:
+        st.warning("Nenhum pedido encontrado.")
+        return pd.DataFrame()
 
-        linhas = []
-        for pedido in pedidos_total:
-            # 🔹 FILTRA APENAS PAGOS
-            if pedido.get("financial_status") not in ["paid", "partially_paid"]:
-                continue
+    linhas = []
+    for pedido in pedidos_total:
+        # 🔹 FILTRA APENAS PAGOS
+        if pedido.get("financial_status") not in ["paid", "partially_paid"]:
+            continue
 
-         line_items = pedido.get("line_items", [])
-if not line_items:
-    continue
-for item in line_items:
-    linha = {
-        "data": pedido.get("created_at"),
-        "cliente": (pedido.get("customer") or {}).get("first_name", "") + " " +
-                   (pedido.get("customer") or {}).get("last_name", ""),
-        "Status": pedido.get("fulfillment_status") or "Aguardando",
-        "produto": item.get("title"),
-        "variante": item.get("variant_title"),
-        "itens": item.get("quantity"),
-        "forma_entrega": (pedido.get("shipping_lines")[0]["title"]
-                          if pedido.get("shipping_lines") else "N/A"),
-        "estado": (pedido.get("shipping_address") or {}).get("province", "N/A"),
-        "cidade": (pedido.get("shipping_address") or {}).get("city", "N/A"),
-        "pagamento": pedido.get("financial_status", "desconhecido"),
-        "order_id": pedido.get("id")  # <-- ESSENCIAL para envio automático à Shopify
-    }
-    linhas.append(linha)
+        line_items = pedido.get("line_items", [])
+        if not line_items:
+            continue
+        for item in line_items:
+            linha = {
+                "data": pedido.get("created_at"),
+                "cliente": (pedido.get("customer") or {}).get("first_name", "") + " " +
+                           (pedido.get("customer") or {}).get("last_name", ""),
+                "Status": pedido.get("fulfillment_status") or "Aguardando",
+                "produto": item.get("title"),
+                "variante": item.get("variant_title"),
+                "itens": item.get("quantity"),
+                "forma_entrega": (pedido.get("shipping_lines")[0]["title"]
+                                  if pedido.get("shipping_lines") else "N/A"),
+                "estado": (pedido.get("shipping_address") or {}).get("province", "N/A"),
+                "cidade": (pedido.get("shipping_address") or {}).get("city", "N/A"),
+                "pagamento": pedido.get("financial_status", "desconhecido"),
+                "order_id": pedido.get("id")  # <-- ESSENCIAL para envio automático à Shopify
+            }
+            linhas.append(linha)
 
-df = pd.DataFrame(linhas)
-df["data"] = pd.to_datetime(df["data"], errors="coerce")
-return df
+    df = pd.DataFrame(linhas)
+    df["data"] = pd.to_datetime(df["data"], errors="coerce")
+    return df
 
     # --- Carregar e salvar dados ---
     df_shopify = carregar_dados_shopify()

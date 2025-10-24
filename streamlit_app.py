@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -80,29 +79,30 @@ opcao = st.sidebar.radio("📋 Selecione o módulo:", ["📦 Estoque", "🚚 Log
 # ===========================================================
 # ==================== MÓDULO: ESTOQUE =====================
 # ===========================================================
-elif opcao == "📦 Estoque":
+if opcao == "📦 Estoque":
     st.subheader("📦 Estoque")
      
-# --- Ler planilha de pedidos ---
-sheet_id = "1dYVZjzCtDBaJ6QdM81WP2k51QodDGZHzKEhzKHSp7v8"
-url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
-df = pd.read_csv(url)
+    # --- Ler planilha de pedidos ---
+    sheet_id = "1dYVZjzCtDBaJ6QdM81WP2k51QodDGZHzKEhzKHSp7v8"
+    url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
+    df = pd.read_csv(url)
 
-# --- Processar datas ---
-df["data_envio"] = pd.to_datetime(df.iloc[:,1], errors="coerce")
-df["data_entrega"] = pd.to_datetime(df.iloc[:,2], errors="coerce")
-df["dias_entrega"] = (df["data_entrega"] - df["data_envio"]).dt.days
+    # --- Processar datas ---
+    df["data_envio"] = pd.to_datetime(df.iloc[:, 1], errors="coerce")
+    df["data_entrega"] = pd.to_datetime(df.iloc[:, 2], errors="coerce")
+    df["dias_entrega"] = (df["data_entrega"] - df["data_envio"]).dt.days
 
-# --- Colunas de estado e cidade ---
-df["estado"] = df.iloc[:,3].str.upper()
-df["cidade"] = df.iloc[:,4].astype(str).str.title()
+    # --- Colunas de estado e cidade ---
+    df["estado"] = df.iloc[:, 3].str.upper()
+    df["cidade"] = df.iloc[:, 4].astype(str).str.title()
 
-# --- Status de entrega ---
-df["Status"] = df["data_entrega"].apply(lambda x: "Entregue" if pd.notna(x) else "Não entregue")
+    # --- Status de entrega ---
+    df["Status"] = df["data_entrega"].apply(lambda x: "Entregue" if pd.notna(x) else "Não entregue")
 
-# --- Código de rastreio e link ---
-df["Código Rastreio"] = df.iloc[:,5].astype(str)
-df["Link J&T"] = "https://www2.jtexpress.com.br/rastreio/track?codigo=" + df["Código Rastreio"]
+    # --- Código de rastreio e link ---
+    df["Código Rastreio"] = df.iloc[:, 5].astype(str)
+    df["Link J&T"] = "https://www2.jtexpress.com.br/rastreio/track?codigo=" + df["Código Rastreio"]
+
 
 
 # --- Dados válidos ---

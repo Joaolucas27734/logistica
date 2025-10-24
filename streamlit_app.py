@@ -294,8 +294,6 @@ elif opcao == "🚚 Logística Geral":
             "forma_entrega", "estado", "cidade", "pagamento", "ID"
         ]
     )
-
-st.info("Selecione um produto, as variantes e dois períodos para comparar.")
 # ======================= TAB 2 ==============================
 with tab2:
     st.subheader("📊 Comparação de Variantes por Produto (Totais por Período)")

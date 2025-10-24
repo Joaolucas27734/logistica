@@ -80,7 +80,7 @@ opcao = st.sidebar.radio("📋 Selecione o módulo:", ["📦 Estoque", "🚚 Log
 # ===========================================================
 # ==================== MÓDULO: ESTOQUE =====================
 # ===========================================================
-elif opcao== "📦 Estoque":
+if opcao == "📦 Estoque":
     # --- Configuração da página ---
     st.set_page_config(page_title="Dashboard Interativo de Entregas + Estoque", layout="wide")
     st.title("📦 Dashboard Interativo – Entregas & Estoque")
@@ -284,7 +284,7 @@ with tab4:
 # ===========================================================
 # ================ MÓDULO: LOGÍSTICA GERAL ==================
 # ===========================================================
-elif opcao == "🚚 Logística Geral":
+if opcao == "🚚 Logística Geral":
     st.subheader("🚚 Logística Geral – Pedidos Shopify")
 
     sheet_id = SHEET_ID

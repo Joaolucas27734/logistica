@@ -80,9 +80,8 @@ opcao = st.sidebar.radio("📋 Selecione o módulo:", ["📦 Estoque", "🚚 Log
 # ===========================================================
 # ==================== MÓDULO: ESTOQUE =====================
 # ===========================================================
-elif opcao ="📦 Estoque":
+elif opcao == "📦 Estoque":
     st.subheader("📦 Estoque")
-
      
 # --- Ler planilha de pedidos ---
 sheet_id = "1dYVZjzCtDBaJ6QdM81WP2k51QodDGZHzKEhzKHSp7v8"

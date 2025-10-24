@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -21,6 +22,7 @@ GSHEET_CLIENT = gspread.authorize(CREDS)
 
 SHEET_ID = "1dYVZjzCtDBaJ6QdM81WP2k51QodDGZHzKEhzKHSp7v8"
 SHEET_NAME = "Pedidos"  # aba principal
+
 
 # ===========================================================
 # =================== FUNÇÕES AUXILIARES ====================
@@ -83,7 +85,7 @@ if opcao == "📦 Estoque":
         (df["data_envio"] >= pd.to_datetime(data_inicio)) &
         (df["data_envio"] <= pd.to_datetime(data_fim))
     ]
-
+    
     st.subheader("📊 Principais Métricas de Entregas")
     df_valid = df_filtrado.dropna(subset=["dias_entrega"])
     total = len(df_valid)
@@ -174,6 +176,7 @@ elif opcao == "🚚 Logística Geral":
     def carregar_dados_shopify():
         SHOP_NAME = st.secrets["shopify"]["shop_name"]
         ACCESS_TOKEN = st.secrets["shopify"]["access_token"]
+
         url_base = f"https://{SHOP_NAME}/admin/api/2023-10/orders.json?status=any&limit=250"
         headers = {"X-Shopify-Access-Token": ACCESS_TOKEN}
 
@@ -210,6 +213,7 @@ elif opcao == "🚚 Logística Geral":
         for pedido in pedidos_total:
             if pedido.get("financial_status") not in ["paid", "partially_paid"]:
                 continue
+
             for item in pedido.get("line_items", []):
                 linha = {
                     "data": pedido.get("created_at"),
@@ -221,11 +225,12 @@ elif opcao == "🚚 Logística Geral":
                     "itens": item.get("quantity"),
                     "forma_entrega": (pedido.get("shipping_lines")[0]["title"]
                                       if pedido.get("shipping_lines") else "N/A"),
-                    "estado": (pedido.get("
-                                                              "estado": (pedido.get("shipping_address") or {}).get("province", "N/A"),
+                    "estado": (pedido.get("shipping_address") or {}).get("province", "N/A"),
                     "cidade": (pedido.get("shipping_address") or {}).get("city", "N/A"),
                     "pagamento": pedido.get("financial_status", "desconhecido"),
-                    "ID": pedido.get("id")
+                    "ID": pedido.get("id"),
+                    "Codigo de rastreio": "",
+                    "Situacao": "Aguardando envio"
                 }
                 linhas.append(linha)
 
@@ -251,9 +256,6 @@ elif opcao == "🚚 Logística Geral":
         "itens", "ID", "Codigo de rastreio", "Situacao",
         "forma_entrega", "estado", "cidade", "pagamento"
     ]
-    for col in ["ID", "Codigo de rastreio", "Situacao"]:
-        if col not in df_shopify.columns:
-            df_shopify[col] = ""
     if "df_shopify_editor" not in st.session_state:
         st.session_state.df_shopify_editor = df_shopify[colunas].copy()
 
@@ -271,7 +273,7 @@ elif opcao == "🚚 Logística Geral":
                 "Código de Rastreio", help="Cole ou digite o código de rastreamento do pedido"
             ),
             "Situacao": st.column_config.SelectboxColumn(
-                "Situação", options=["Aguardando envio", "Enviado", "Entregue", "Reenviado", "Problema"]
+                "Situação", options=["Aguardando envio", "Código inserido", "Enviado Shopify", "Entregue", "Reenviado", "Problema"]
             ),
             "pagamento": st.column_config.TextColumn("Situação Pagamento", disabled=True),
             "data": st.column_config.DatetimeColumn("Data do Pedido", format="DD/MM/YYYY HH:mm"),
@@ -288,7 +290,12 @@ elif opcao == "🚚 Logística Geral":
         # Atualiza session_state
         st.session_state.df_shopify_editor["Status"] = df_editado["Status"]
         st.session_state.df_shopify_editor["Codigo de rastreio"] = df_editado["Codigo de rastreio"]
-        st.session_state.df_shopify_editor["Situacao"] = df_editado["Situacao"]
+
+        # --- Atualiza automaticamente Situacao ---
+        st.session_state.df_shopify_editor["Situacao"] = st.session_state.df_shopify_editor.apply(
+            lambda row: "Código inserido" if row["Codigo de rastreio"].strip() else row["Situacao"],
+            axis=1
+        )
 
         # Salva no Google Sheets
         try:
@@ -298,17 +305,21 @@ elif opcao == "🚚 Logística Geral":
         except Exception as e:
             st.error(f"❌ Erro ao salvar no Google Sheets: {e}")
 
-        # --- Função para envio de códigos com logs detalhados ---
+        # --- Função para envio de códigos para Shopify ---
         def enviar_codigos_shopify(df):
             SHOP_NAME = st.secrets["shopify"]["shop_name"]
             ACCESS_TOKEN = st.secrets["shopify"]["access_token"]
             url_base = f"https://{SHOP_NAME}/admin/api/2023-10"
             headers = {"Content-Type": "application/json", "X-Shopify-Access-Token": ACCESS_TOKEN}
 
-            # Filtra apenas pedidos com código de rastreio
-            novos_codigos = df[df["Codigo de rastreio"].notna() & (df["Codigo de rastreio"] != "")]
+            # Filtra apenas pedidos com código de rastreio e status correto
+            novos_codigos = df[
+                (df["Codigo de rastreio"].notna()) & 
+                (df["Codigo de rastreio"] != "") &
+                (df["Situacao"] == "Código inserido")
+            ]
             if novos_codigos.empty:
-                st.info("Nenhum código de rastreio novo para enviar à Shopify.")
+                st.info("Nenhum código de rastreio pronto para enviar à Shopify.")
                 return
 
             for _, row in novos_codigos.iterrows():
@@ -321,12 +332,9 @@ elif opcao == "🚚 Logística Geral":
                     st.warning(f"⚠️ Pedido com dados incompletos: Cliente: {cliente}, Produto: {produto}. Pulando...")
                     continue
 
-                # --- 1) Busca fulfillment_orders ---
+                # --- Buscar fulfillment_orders ---
                 try:
                     fo_res = requests.get(f"{url_base}/orders/{order_id}/fulfillment_orders.json", headers=headers)
-                    if fo_res.status_code != 200:
-                        st.error(f"❌ Erro ao buscar fulfillment_orders para pedido #{order_id}: {fo_res.status_code} - {fo_res.text}")
-                        continue
                     fo_data = fo_res.json().get("fulfillment_orders", [])
                     if not fo_data:
                         st.warning(f"⚠️ Nenhum fulfillment_order encontrado para pedido #{order_id}.")
@@ -337,65 +345,58 @@ elif opcao == "🚚 Logística Geral":
                     st.error(f"❌ Falha ao buscar fulfillment_orders para pedido #{order_id}: {e}")
                     continue
 
-                # --- 2) Busca dados do pedido (itens) para montar o payload ---
+                # --- Buscar dados do pedido ---
                 try:
                     order_res = requests.get(f"{url_base}/orders/{order_id}.json", headers=headers)
-                    if order_res.status_code != 200:
-                        st.error(f"❌ Erro ao buscar pedido #{order_id}: {order_res.status_code} - {order_res.text}")
-                        continue
                     order_data = order_res.json().get("order", {})
                     line_items = order_data.get("line_items", [])
                 except Exception as e:
                     st.error(f"❌ Falha ao buscar pedido #{order_id}: {e}")
                     continue
 
-                # --- Monta line_items_by_fulfillment_order array ---
+                # --- Preparar line_items_by_fulfillment_order ---
                 li_by_fo = []
                 for item in line_items:
                     qty = item.get("fulfillable_quantity", 0)
-                    if qty and qty > 0:
+                    if qty > 0:
                         li_by_fo.append({
                             "fulfillment_order_id": fo_id,
-                            "fulfillment_order_line_items": [
-                                {"id": item["id"], "quantity": qty}
-                            ]
+                            "fulfillment_order_line_items": [{"id": item["id"], "quantity": qty}]
                         })
                 if not li_by_fo:
-                    st.warning(
-                        f"⚠️ Pedido #{order_id} não tem itens fulfillables.\n"
-                        f"Cliente: {cliente}\n"
-                        f"Produtos no pedido: {[item['title'] for item in line_items]}\n"
-                        f"Sugestão: Verifique se o pedido já foi enviado manualmente ou se os itens são digitais."
-                    )
+                    st.warning(f"⚠️ Pedido #{order_id} não tem itens fulfillables. Cliente: {cliente}")
                     continue
 
                 # --- Payload de envio ---
                 fulfillment_payload = {
                     "fulfillment": {
                         "location_id": fo.get("assigned_location", {}).get("location", {}).get("id"),
-                        "tracking_info": {
-                            "company": "Correios",
-                            "number": tracking_code,
-                        },
+                        "tracking_info": {"company": "Correios", "number": tracking_code},
                         "line_items_by_fulfillment_order": li_by_fo,
                         "notify_customer": True
                     }
                 }
 
-                # --- 3) Envia POST para criar fulfillment ---
+                # --- Envia para Shopify ---
                 try:
-                    resp = requests.post(f"{url_base}/fulfillments.json",
-                                         headers=headers, json=fulfillment_payload)
+                    resp = requests.post(f"{url_base}/fulfillments.json", headers=headers, json=fulfillment_payload)
                     if resp.status_code in [200, 201]:
                         st.success(f"📦 Código {tracking_code} enviado com sucesso para o pedido #{order_id}.")
+                        # Atualiza status no dataframe para “Enviado Shopify”
+                        st.session_state.df_shopify_editor.loc[
+                            st.session_state.df_shopify_editor["ID"] == order_id, "Situacao"
+                        ] = "Enviado Shopify"
                     else:
                         st.warning(f"⚠️ Erro ao atualizar pedido #{order_id}: {resp.status_code} - {resp.text}")
                 except Exception as e:
                     st.error(f"❌ Falha ao enviar código para pedido #{order_id}: {e}")
 
-        # Chama a função de envio
+        # Chama a função
         enviar_codigos_shopify(st.session_state.df_shopify_editor)
-        # ======================= TAB 2 ==============================
+
+
+
+# ======================= TAB 2 ==============================
 with tab2:
     st.subheader("📊 Comparação de Variantes por Produto (Totais por Período)")
 
@@ -547,15 +548,12 @@ with tab2:
             st.warning(f"📉 Queda de **{abs(var_pct):.2f}%** no total de pedidos entre os períodos.")
         else:
             st.info("⚖️ Nenhuma variação significativa entre os períodos.")
-            # ======================= TAB 3 ==============================
+
+# ======================= TAB 3 ==============================
 with tab3:
     st.subheader("🏙️ Pedidos por Localização")
-    
-    pedidos_estado = st.session_state.df_shopify_editor.groupby("estado")["itens"].sum().reset_index()
-    pedidos_estado = pedidos_estado.sort_values("itens", ascending=False)
-    
-    pedidos_cidade = st.session_state.df_shopify_editor.groupby("cidade")["itens"].sum().reset_index()
-    pedidos_cidade = pedidos_cidade.sort_values("itens", ascending=False)
+    pedidos_estado = st.session_state.df_shopify_editor.groupby("estado")["itens"].sum().reset_index().sort_values("itens", ascending=False)
+    pedidos_cidade = st.session_state.df_shopify_editor.groupby("cidade")["itens"].sum().reset_index().sort_values("itens", ascending=False)
 
     st.markdown("### 📍 Por Estado")
     st.dataframe(pedidos_estado)
@@ -563,30 +561,22 @@ with tab3:
     st.markdown("### 🏙️ Por Cidade")
     st.dataframe(pedidos_cidade)
 
-
 # ======================= TAB 4 ==============================
 with tab4:
     st.subheader("📈 Tendência de Pedidos por Variante")
-    
     variantes_disponiveis = st.session_state.df_shopify_editor["variante"].dropna().unique()
     variante_sel = st.selectbox("Selecione a variante:", variantes_disponiveis)
-    
-    df_var = st.session_state.df_shopify_editor[
-        st.session_state.df_shopify_editor["variante"] == variante_sel
-    ]
-    
+    df_var = st.session_state.df_shopify_editor[st.session_state.df_shopify_editor["variante"] == variante_sel]
     df_trend = df_var.groupby(df_var["data"].dt.date)["itens"].sum().reset_index()
     df_trend.columns = ["Data", "Qtd Pedidos"]
-    
     fig = px.line(df_trend, x="Data", y="Qtd Pedidos", markers=True, title=f"Tendência: {variante_sel}")
     st.plotly_chart(fig, use_container_width=True)
-
 
 # ======================= TAB 5 ==============================
 with tab5:
     st.subheader("⚖️ Comparar Variantes por Pontos/Datas")
     
-    variantes_disponiveis = st.session_state.df_shopify_editor["variante"].dropna().unique()
+    variantes_disponiveis = df_shopify["variante"].dropna().unique()
     num_comparacoes = st.number_input("Quantas comparações deseja?", min_value=1, max_value=5, value=2)
 
     df_todas = pd.DataFrame()
@@ -595,20 +585,21 @@ with tab5:
         st.markdown(f"### Comparação {i+1}")
         var_sel = st.selectbox(f"Selecione a variante {i+1}:", variantes_disponiveis, key=f"var{i}")
 
-        df_var_total = st.session_state.df_shopify_editor[
-            st.session_state.df_shopify_editor["variante"] == var_sel
-        ]
+        # Definir período mínimo e máximo da variante selecionada
+        df_var_total = df_shopify[df_shopify["variante"] == var_sel]
         data_min, data_max = df_var_total["data"].min().date(), df_var_total["data"].max().date()
         data_inicio, data_fim = st.date_input(f"Período para {var_sel}:", [data_min, data_max], key=f"date{i}")
 
+        # Filtrar dados pelo período selecionado
         df_var = df_var_total[
             (df_var_total["data"].dt.date >= data_inicio) &
             (df_var_total["data"].dt.date <= data_fim)
         ]
 
+        # Agrupar por dia e criar coluna de ponto
         df_var = df_var.groupby(df_var["data"].dt.date)["itens"].sum().reset_index()
         df_var["variante"] = f"{var_sel} (Comp {i+1})"
-        df_var["Ponto"] = range(1, len(df_var) + 1)
+        df_var["Ponto"] = range(1, len(df_var) + 1)  # eixo X: ponto 1, 2, 3...
 
         df_todas = pd.concat([df_todas, df_var], ignore_index=True)
 
@@ -637,8 +628,6 @@ with tab5:
             media_itens = df_comp["itens"].mean() if len(df_comp) > 0 else 0
             max_itens = df_comp["itens"].max() if len(df_comp) > 0 else 0
             colunas_cards[i].metric(f"Variante {i+1}", f"{total_itens} itens", f"Média: {media_itens:.1f}, Máx: {max_itens}")
+
     else:
         st.info("Nenhuma comparação disponível para os períodos selecionados.")
-
-
-

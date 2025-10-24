@@ -80,7 +80,7 @@ opcao = st.sidebar.radio("📋 Selecione o módulo:", ["📦 Estoque", "🚚 Log
 # ===========================================================
 # ==================== MÓDULO: ESTOQUE =====================
 # ===========================================================
-if opcao == "📦 Estoque":
+elif opcao== "📦 Estoque":
     # --- Configuração da página ---
     st.set_page_config(page_title="Dashboard Interativo de Entregas + Estoque", layout="wide")
     st.title("📦 Dashboard Interativo – Entregas & Estoque")

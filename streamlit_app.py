@@ -80,7 +80,7 @@ opcao = st.sidebar.radio("📋 Selecione o módulo:", ["📦 Estoque", "🚚 Log
 # ===========================================================
 # ==================== MÓDULO: ESTOQUE =====================
 # ===========================================================
-elif opcao == "📦 Estoque":
+elif opcao ="📦 Estoque":
     st.subheader("📦 Estoque")
 
      

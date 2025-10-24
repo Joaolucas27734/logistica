@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -22,7 +21,6 @@ GSHEET_CLIENT = gspread.authorize(CREDS)
 
 SHEET_ID = "1dYVZjzCtDBaJ6QdM81WP2k51QodDGZHzKEhzKHSp7v8"
 SHEET_NAME = "Pedidos"  # aba principal
-
 
 # ===========================================================
 # =================== FUNÇÕES AUXILIARES ====================
@@ -85,7 +83,7 @@ if opcao == "📦 Estoque":
         (df["data_envio"] >= pd.to_datetime(data_inicio)) &
         (df["data_envio"] <= pd.to_datetime(data_fim))
     ]
-    
+
     st.subheader("📊 Principais Métricas de Entregas")
     df_valid = df_filtrado.dropna(subset=["dias_entrega"])
     total = len(df_valid)
@@ -176,7 +174,6 @@ elif opcao == "🚚 Logística Geral":
     def carregar_dados_shopify():
         SHOP_NAME = st.secrets["shopify"]["shop_name"]
         ACCESS_TOKEN = st.secrets["shopify"]["access_token"]
-
         url_base = f"https://{SHOP_NAME}/admin/api/2023-10/orders.json?status=any&limit=250"
         headers = {"X-Shopify-Access-Token": ACCESS_TOKEN}
 
@@ -194,17 +191,6 @@ elif opcao == "🚚 Logística Geral":
             pedidos_total.extend(data.get("orders", []))
             contador += 1
 
-    # --- Abas ---
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "📋 Pedidos Pagos",
-        "📦 Análises por Produto",
-        "🏙️ Análises por Localização",
-        "📈 Tendência por Variante",
-        "⚖️ Comparar Variantes"
-    ])
-# ======================= TAB 1 ==============================
-with tab1:
-    
             # Próxima página
             link_header = response.headers.get("Link", "")
             next_url = None
@@ -224,7 +210,6 @@ with tab1:
         for pedido in pedidos_total:
             if pedido.get("financial_status") not in ["paid", "partially_paid"]:
                 continue
-
             for item in pedido.get("line_items", []):
                 linha = {
                     "data": pedido.get("created_at"),
@@ -236,7 +221,8 @@ with tab1:
                     "itens": item.get("quantity"),
                     "forma_entrega": (pedido.get("shipping_lines")[0]["title"]
                                       if pedido.get("shipping_lines") else "N/A"),
-                    "estado": (pedido.get("shipping_address") or {}).get("province", "N/A"),
+                    "estado": (pedido.get("
+                                                              "estado": (pedido.get("shipping_address") or {}).get("province", "N/A"),
                     "cidade": (pedido.get("shipping_address") or {}).get("city", "N/A"),
                     "pagamento": pedido.get("financial_status", "desconhecido"),
                     "ID": pedido.get("id")
@@ -258,6 +244,7 @@ with tab1:
     st.success(f"✅ Dados da Shopify (apenas pagos) salvos na aba '{aba_shopify}'")
 
     df_shopify = df_shopify.sort_values("data", ascending=False)
+
     # --- Inicializa editor ---
     colunas = [
         "data", "cliente", "Status", "produto", "variante",
@@ -356,7 +343,6 @@ with tab1:
                     if order_res.status_code != 200:
                         st.error(f"❌ Erro ao buscar pedido #{order_id}: {order_res.status_code} - {order_res.text}")
                         continue
-
                     order_data = order_res.json().get("order", {})
                     line_items = order_data.get("line_items", [])
                 except Exception as e:
@@ -371,10 +357,7 @@ with tab1:
                         li_by_fo.append({
                             "fulfillment_order_id": fo_id,
                             "fulfillment_order_line_items": [
-                                {
-                                    "id": item["id"],
-                                    "quantity": qty
-                                }
+                                {"id": item["id"], "quantity": qty}
                             ]
                         })
                 if not li_by_fo:
@@ -393,7 +376,6 @@ with tab1:
                         "tracking_info": {
                             "company": "Correios",
                             "number": tracking_code,
-                            # "url": "",  # opcional: link para rastreio, se disponível
                         },
                         "line_items_by_fulfillment_order": li_by_fo,
                         "notify_customer": True
@@ -413,10 +395,7 @@ with tab1:
 
         # Chama a função de envio
         enviar_codigos_shopify(st.session_state.df_shopify_editor)
-
-
-
-# ======================= TAB 2 ==============================
+        # ======================= TAB 2 ==============================
 with tab2:
     st.subheader("📊 Comparação de Variantes por Produto (Totais por Período)")
 
@@ -568,12 +547,15 @@ with tab2:
             st.warning(f"📉 Queda de **{abs(var_pct):.2f}%** no total de pedidos entre os períodos.")
         else:
             st.info("⚖️ Nenhuma variação significativa entre os períodos.")
-
-# ======================= TAB 3 ==============================
+            # ======================= TAB 3 ==============================
 with tab3:
     st.subheader("🏙️ Pedidos por Localização")
-    pedidos_estado = st.session_state.df_shopify_editor.groupby("estado")["itens"].sum().reset_index().sort_values("itens", ascending=False)
-    pedidos_cidade = st.session_state.df_shopify_editor.groupby("cidade")["itens"].sum().reset_index().sort_values("itens", ascending=False)
+    
+    pedidos_estado = st.session_state.df_shopify_editor.groupby("estado")["itens"].sum().reset_index()
+    pedidos_estado = pedidos_estado.sort_values("itens", ascending=False)
+    
+    pedidos_cidade = st.session_state.df_shopify_editor.groupby("cidade")["itens"].sum().reset_index()
+    pedidos_cidade = pedidos_cidade.sort_values("itens", ascending=False)
 
     st.markdown("### 📍 Por Estado")
     st.dataframe(pedidos_estado)
@@ -581,22 +563,30 @@ with tab3:
     st.markdown("### 🏙️ Por Cidade")
     st.dataframe(pedidos_cidade)
 
+
 # ======================= TAB 4 ==============================
 with tab4:
     st.subheader("📈 Tendência de Pedidos por Variante")
+    
     variantes_disponiveis = st.session_state.df_shopify_editor["variante"].dropna().unique()
     variante_sel = st.selectbox("Selecione a variante:", variantes_disponiveis)
-    df_var = st.session_state.df_shopify_editor[st.session_state.df_shopify_editor["variante"] == variante_sel]
+    
+    df_var = st.session_state.df_shopify_editor[
+        st.session_state.df_shopify_editor["variante"] == variante_sel
+    ]
+    
     df_trend = df_var.groupby(df_var["data"].dt.date)["itens"].sum().reset_index()
     df_trend.columns = ["Data", "Qtd Pedidos"]
+    
     fig = px.line(df_trend, x="Data", y="Qtd Pedidos", markers=True, title=f"Tendência: {variante_sel}")
     st.plotly_chart(fig, use_container_width=True)
+
 
 # ======================= TAB 5 ==============================
 with tab5:
     st.subheader("⚖️ Comparar Variantes por Pontos/Datas")
     
-    variantes_disponiveis = df_shopify["variante"].dropna().unique()
+    variantes_disponiveis = st.session_state.df_shopify_editor["variante"].dropna().unique()
     num_comparacoes = st.number_input("Quantas comparações deseja?", min_value=1, max_value=5, value=2)
 
     df_todas = pd.DataFrame()
@@ -605,21 +595,20 @@ with tab5:
         st.markdown(f"### Comparação {i+1}")
         var_sel = st.selectbox(f"Selecione a variante {i+1}:", variantes_disponiveis, key=f"var{i}")
 
-        # Definir período mínimo e máximo da variante selecionada
-        df_var_total = df_shopify[df_shopify["variante"] == var_sel]
+        df_var_total = st.session_state.df_shopify_editor[
+            st.session_state.df_shopify_editor["variante"] == var_sel
+        ]
         data_min, data_max = df_var_total["data"].min().date(), df_var_total["data"].max().date()
         data_inicio, data_fim = st.date_input(f"Período para {var_sel}:", [data_min, data_max], key=f"date{i}")
 
-        # Filtrar dados pelo período selecionado
         df_var = df_var_total[
             (df_var_total["data"].dt.date >= data_inicio) &
             (df_var_total["data"].dt.date <= data_fim)
         ]
 
-        # Agrupar por dia e criar coluna de ponto
         df_var = df_var.groupby(df_var["data"].dt.date)["itens"].sum().reset_index()
         df_var["variante"] = f"{var_sel} (Comp {i+1})"
-        df_var["Ponto"] = range(1, len(df_var) + 1)  # eixo X: ponto 1, 2, 3...
+        df_var["Ponto"] = range(1, len(df_var) + 1)
 
         df_todas = pd.concat([df_todas, df_var], ignore_index=True)
 
@@ -648,6 +637,8 @@ with tab5:
             media_itens = df_comp["itens"].mean() if len(df_comp) > 0 else 0
             max_itens = df_comp["itens"].max() if len(df_comp) > 0 else 0
             colunas_cards[i].metric(f"Variante {i+1}", f"{total_itens} itens", f"Média: {media_itens:.1f}, Máx: {max_itens}")
-
     else:
         st.info("Nenhuma comparação disponível para os períodos selecionados.")
+
+
+

@@ -79,9 +79,9 @@ opcao = st.sidebar.radio("📋 Selecione o módulo:", ["📦 Estoque", "🚚 Log
 # ===========================================================
 # ==================== MÓDULO: ESTOQUE =====================
 # ===========================================================
-if opcao == "📦 Estoque":
-    st.subheader("📦 Estoque")
-     
+if pagina == "📦 Estoque":
+    st.title("📦 Dashboard de Estoque")
+
     # --- Ler planilha de pedidos ---
     sheet_id = "1dYVZjzCtDBaJ6QdM81WP2k51QodDGZHzKEhzKHSp7v8"
     url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"

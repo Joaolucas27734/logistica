@@ -194,6 +194,17 @@ elif opcao == "🚚 Logística Geral":
             pedidos_total.extend(data.get("orders", []))
             contador += 1
 
+    # --- Abas ---
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "📋 Pedidos Pagos",
+        "📦 Análises por Produto",
+        "🏙️ Análises por Localização",
+        "📈 Tendência por Variante",
+        "⚖️ Comparar Variantes"
+    ])
+# ======================= TAB 1 ==============================
+with tab1:
+    
             # Próxima página
             link_header = response.headers.get("Link", "")
             next_url = None
@@ -247,16 +258,6 @@ elif opcao == "🚚 Logística Geral":
     st.success(f"✅ Dados da Shopify (apenas pagos) salvos na aba '{aba_shopify}'")
 
     df_shopify = df_shopify.sort_values("data", ascending=False)
-
-    # --- Abas ---
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "📋 Pedidos Pagos",
-        "📦 Análises por Produto",
-        "🏙️ Análises por Localização",
-        "📈 Tendência por Variante",
-        "⚖️ Comparar Variantes"
-    ])
-
     # --- Inicializa editor ---
     colunas = [
         "data", "cliente", "Status", "produto", "variante",

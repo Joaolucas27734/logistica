@@ -295,124 +295,109 @@ elif opcao == "🚚 Logística Geral":
         ]
     )
 
-    # --- Botão Salvar + Envio ---
-    if st.button("💾 Salvar alterações e enviar à Shopify"):
-        # Atualiza session_state
-        st.session_state.df_shopify_editor["Status"] = df_editado["Status"]
-        st.session_state.df_shopify_editor["Codigo de rastreio"] = df_editado["Codigo de rastreio"]
-        st.session_state.df_shopify_editor["Situacao"] = df_editado["Situacao"]
+# --- Botão Salvar + Envio ---
+if st.button("💾 Salvar alterações e enviar à Shopify"):
+    # Atualiza session_state
+    st.session_state.df_shopify_editor["Status"] = df_editado["Status"]
+    st.session_state.df_shopify_editor["Codigo de rastreio"] = df_editado["Codigo de rastreio"]
+    st.session_state.df_shopify_editor["Situacao"] = df_editado["Situacao"]
+    
+    # Salva no Google Sheets
+    try:
+        worksheet.clear()
+        worksheet.update(df_para_lista(st.session_state.df_shopify_editor))
+        st.success("✅ Alterações salvas com sucesso no Google Sheets!")
+    except Exception as e:
+        st.error(f"❌ Erro ao salvar no Google Sheets: {e}")
 
-        # Salva no Google Sheets
-        try:
-            worksheet.clear()
-            worksheet.update(df_para_lista(st.session_state.df_shopify_editor))
-            st.success("✅ Alterações salvas com sucesso no Google Sheets!")
-        except Exception as e:
-            st.error(f"❌ Erro ao salvar no Google Sheets: {e}")
+    # --- Função para envio de códigos para Shopify ---
+    def enviar_codigos_shopify(df):
+        SHOP_NAME = st.secrets["shopify"]["shop_name"]
+        ACCESS_TOKEN = st.secrets["shopify"]["access_token"]
+        url_base = f"https://{SHOP_NAME}/admin/api/2023-10"
+        headers = {"Content-Type": "application/json", "X-Shopify-Access-Token": ACCESS_TOKEN}
 
-        # --- Função para envio de códigos com logs detalhados ---
-        def enviar_codigos_shopify(df):
-            SHOP_NAME = st.secrets["shopify"]["shop_name"]
-            ACCESS_TOKEN = st.secrets["shopify"]["access_token"]
-            url_base = f"https://{SHOP_NAME}/admin/api/2023-10"
-            headers = {"Content-Type": "application/json", "X-Shopify-Access-Token": ACCESS_TOKEN}
+        # Filtra apenas pedidos com código de rastreio e status DSers OK
+        novos_codigos = df[
+            (df["Codigo de rastreio"].notna()) & 
+            (df["Codigo de rastreio"] != "") &
+            (df["Situacao"] == "Código inserido")
+        ]
+        if novos_codigos.empty:
+            st.info("Nenhum código de rastreio pronto para enviar à Shopify.")
+            return
 
-            # Filtra apenas pedidos com código de rastreio
-            novos_codigos = df[df["Codigo de rastreio"].notna() & (df["Codigo de rastreio"] != "")]
-            if novos_codigos.empty:
-                st.info("Nenhum código de rastreio novo para enviar à Shopify.")
-                return
+        for _, row in novos_codigos.iterrows():
+            order_id = str(row["ID"]).strip()
+            tracking_code = str(row["Codigo de rastreio"]).strip()
+            cliente = row["cliente"]
+            produto = row["produto"]
 
-            for _, row in novos_codigos.iterrows():
-                order_id = str(row["ID"]).strip()
-                tracking_code = str(row["Codigo de rastreio"]).strip()
-                cliente = row["cliente"]
-                produto = row["produto"]
+            if not order_id or not tracking_code:
+                st.warning(f"⚠️ Pedido com dados incompletos: Cliente: {cliente}, Produto: {produto}. Pulando...")
+                continue
 
-                if not order_id or not tracking_code:
-                    st.warning(f"⚠️ Pedido com dados incompletos: Cliente: {cliente}, Produto: {produto}. Pulando...")
+            # --- Buscar fulfillment_orders ---
+            try:
+                fo_res = requests.get(f"{url_base}/orders/{order_id}/fulfillment_orders.json", headers=headers)
+                fo_data = fo_res.json().get("fulfillment_orders", [])
+                if not fo_data:
+                    st.warning(f"⚠️ Nenhum fulfillment_order encontrado para pedido #{order_id}.")
                     continue
+                fo = fo_data[0]
+                fo_id = fo.get("id")
+            except Exception as e:
+                st.error(f"❌ Falha ao buscar fulfillment_orders para pedido #{order_id}: {e}")
+                continue
 
-                # --- 1) Busca fulfillment_orders ---
-                try:
-                    fo_res = requests.get(f"{url_base}/orders/{order_id}/fulfillment_orders.json", headers=headers)
-                    if fo_res.status_code != 200:
-                        st.error(f"❌ Erro ao buscar fulfillment_orders para pedido #{order_id}: {fo_res.status_code} - {fo_res.text}")
-                        continue
-                    fo_data = fo_res.json().get("fulfillment_orders", [])
-                    if not fo_data:
-                        st.warning(f"⚠️ Nenhum fulfillment_order encontrado para pedido #{order_id}.")
-                        continue
-                    fo = fo_data[0]
-                    fo_id = fo.get("id")
-                except Exception as e:
-                    st.error(f"❌ Falha ao buscar fulfillment_orders para pedido #{order_id}: {e}")
-                    continue
+            # --- Buscar dados do pedido ---
+            try:
+                order_res = requests.get(f"{url_base}/orders/{order_id}.json", headers=headers)
+                order_data = order_res.json().get("order", {})
+                line_items = order_data.get("line_items", [])
+            except Exception as e:
+                st.error(f"❌ Falha ao buscar pedido #{order_id}: {e}")
+                continue
 
-                # --- 2) Busca dados do pedido (itens) para montar o payload ---
-                try:
-                    order_res = requests.get(f"{url_base}/orders/{order_id}.json", headers=headers)
-                    if order_res.status_code != 200:
-                        st.error(f"❌ Erro ao buscar pedido #{order_id}: {order_res.status_code} - {order_res.text}")
-                        continue
+            # --- Preparar line_items_by_fulfillment_order ---
+            li_by_fo = []
+            for item in line_items:
+                qty = item.get("fulfillable_quantity", 0)
+                if qty > 0:
+                    li_by_fo.append({
+                        "fulfillment_order_id": fo_id,
+                        "fulfillment_order_line_items": [{"id": item["id"], "quantity": qty}]
+                    })
+            if not li_by_fo:
+                st.warning(f"⚠️ Pedido #{order_id} não tem itens fulfillables. Cliente: {cliente}")
+                continue
 
-                    order_data = order_res.json().get("order", {})
-                    line_items = order_data.get("line_items", [])
-                except Exception as e:
-                    st.error(f"❌ Falha ao buscar pedido #{order_id}: {e}")
-                    continue
-
-                # --- Monta line_items_by_fulfillment_order array ---
-                li_by_fo = []
-                for item in line_items:
-                    qty = item.get("fulfillable_quantity", 0)
-                    if qty and qty > 0:
-                        li_by_fo.append({
-                            "fulfillment_order_id": fo_id,
-                            "fulfillment_order_line_items": [
-                                {
-                                    "id": item["id"],
-                                    "quantity": qty
-                                }
-                            ]
-                        })
-                if not li_by_fo:
-                    st.warning(
-                        f"⚠️ Pedido #{order_id} não tem itens fulfillables.\n"
-                        f"Cliente: {cliente}\n"
-                        f"Produtos no pedido: {[item['title'] for item in line_items]}\n"
-                        f"Sugestão: Verifique se o pedido já foi enviado manualmente ou se os itens são digitais."
-                    )
-                    continue
-
-                # --- Payload de envio ---
-                fulfillment_payload = {
-                    "fulfillment": {
-                        "location_id": fo.get("assigned_location", {}).get("location", {}).get("id"),
-                        "tracking_info": {
-                            "company": "Correios",
-                            "number": tracking_code,
-                            # "url": "",  # opcional: link para rastreio, se disponível
-                        },
-                        "line_items_by_fulfillment_order": li_by_fo,
-                        "notify_customer": True
-                    }
+            # --- Payload de envio ---
+            fulfillment_payload = {
+                "fulfillment": {
+                    "location_id": fo.get("assigned_location", {}).get("location", {}).get("id"),
+                    "tracking_info": {"company": "Correios", "number": tracking_code},
+                    "line_items_by_fulfillment_order": li_by_fo,
+                    "notify_customer": True
                 }
+            }
 
-                # --- 3) Envia POST para criar fulfillment ---
-                try:
-                    resp = requests.post(f"{url_base}/fulfillments.json",
-                                         headers=headers, json=fulfillment_payload)
-                    if resp.status_code in [200, 201]:
-                        st.success(f"📦 Código {tracking_code} enviado com sucesso para o pedido #{order_id}.")
-                    else:
-                        st.warning(f"⚠️ Erro ao atualizar pedido #{order_id}: {resp.status_code} - {resp.text}")
-                except Exception as e:
-                    st.error(f"❌ Falha ao enviar código para pedido #{order_id}: {e}")
+            # --- Envia para Shopify ---
+            try:
+                resp = requests.post(f"{url_base}/fulfillments.json", headers=headers, json=fulfillment_payload)
+                if resp.status_code in [200, 201]:
+                    st.success(f"📦 Código {tracking_code} enviado com sucesso para o pedido #{order_id}.")
+                    # Atualiza status no dataframe para “Enviado Shopify”
+                    st.session_state.df_shopify_editor.loc[
+                        st.session_state.df_shopify_editor["ID"] == order_id, "Situacao"
+                    ] = "Enviado Shopify"
+                else:
+                    st.warning(f"⚠️ Erro ao atualizar pedido #{order_id}: {resp.status_code} - {resp.text}")
+            except Exception as e:
+                st.error(f"❌ Falha ao enviar código para pedido #{order_id}: {e}")
 
-        # Chama a função de envio
-        enviar_codigos_shopify(st.session_state.df_shopify_editor)
-
+    # Chama a função
+    enviar_codigos_shopify(st.session_state.df_shopify_editor)
 
 
 # ======================= TAB 2 ==============================

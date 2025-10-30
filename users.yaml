@@ -1,0 +1,22 @@
+credentials:
+  usernames:
+    joao:
+      name: "João Luca"
+      password: "12345"
+      role: "admin"
+      email: "joao@empresa.com"
+    maria:
+      name: "Maria Souza"
+      password: "abcde"
+      role: "logistica"
+      email: "maria@empresa.com"
+    pedro:
+      name: "Pedro Lima"
+      password: "xyz123"
+      role: "suporte"
+      email: "pedro@empresa.com"
+
+cookie:
+  name: "dashboard_login"
+  key: "assinatura_cookie"
+  expiry_days: 30

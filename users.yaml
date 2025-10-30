@@ -2,17 +2,17 @@ credentials:
   usernames:
     joao:
       name: "João Luca"
-      password: "12345"
+      password: "$2b$12$5Ew6zFQ7G5V1uK7wL0YJmOYt5y0CwIG.TkfGqQJfJ7d2kIbw7Gp6O"  # senha: 12345
       role: "admin"
       email: "joao@empresa.com"
     maria:
       name: "Maria Souza"
-      password: "abcde"
+      password: "$2b$12$qUfG5K0P2GzJg1pB1xL2HeoB/JnLZ6vMx2qfjB0B8Q2o/hTEXqR5a"  # senha: abcde
       role: "logistica"
       email: "maria@empresa.com"
     pedro:
       name: "Pedro Lima"
-      password: "xyz123"
+      password: "$2b$12$HhCj1KxZ6W5O2pM1X9K2he7/PaZq9JhH3K6RfgQX7bYtGZl7Pr6Wa"  # senha: xyz123
       role: "suporte"
       email: "pedro@empresa.com"
 

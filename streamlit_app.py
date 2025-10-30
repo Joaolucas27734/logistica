@@ -16,14 +16,14 @@ authenticator = stauth.Authenticate(
     config['cookie']['expiry_days']
 )
 
-# --- Tela de login
-name, authentication_status, username = authenticator.login("Login", "main")
+# --- Tela de login (corrigido com location="main")
+name, authentication_status, username = authenticator.login("Login", location="main")
 
 if authentication_status:
     st.sidebar.success(f"Bem-vindo, {name} 👋")
     role = config['credentials']['usernames'][username]['role']
 
-    # --- Exemplo de controle por nível de acesso
+    # --- Controle por nível de acesso
     if role == "admin":
         st.title("📊 Dashboard Administrativo")
         st.write("Aqui o admin vê tudo.")
